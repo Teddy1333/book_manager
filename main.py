@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from os import getenv
+from pathlib import Path
 from secrets import token_urlsafe
 from typing import Annotated
 from urllib.parse import quote
@@ -10,6 +11,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, statu
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field, field_validator
@@ -24,6 +26,7 @@ from database.db_manager import engine, get_db
 
 SECRET_KEY = getenv("BOOK_MANAGER_SECRET_KEY", "diplomna_rabota_pu_key")
 ALGORITHM = "HS256"
+BASE_DIR = Path(__file__).resolve().parent
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -41,6 +44,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 db_models.Base.metadata.create_all(bind=engine)
+app.mount("/app", StaticFiles(directory=BASE_DIR / "static", html=True), name="book_journal_app")
 
 
 @app.exception_handler(RuntimeError)

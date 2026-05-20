@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#080b12">
+    <title>The Book Journal & Diary</title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: "#080b12",
+              panel: "#111827",
+              panel2: "#182132",
+              line: "#273247",
+              parchment: "#f6efe3",
+              aqua: "#22d3ee",
+              tealglow: "#14b8a6",
+              gold: "#f1c96b"
+            },
+            boxShadow: {
+              premium: "0 24px 90px rgba(0,0,0,.42)",
+              glow: "0 0 34px rgba(34,211,238,.28)"
+            }
+          }
+        }
+      };
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="/app/styles.css">
+  </head>
+  <body class="min-h-screen bg-ink text-parchment antialiased">
+    <div class="app-shell lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
+      <aside class="sidebar border-line/80 bg-ink/90 backdrop-blur-xl lg:min-h-screen lg:border-r lg:p-6" aria-label="Primary">
+        <a class="brand" href="#dashboard" aria-label="The Book Journal & Diary">
+          <span class="brand-mark"><i class="fa-solid fa-book-open-reader"></i></span>
+          <span>
+            <strong>Book Journal</strong>
+            <small>& Diary</small>
+          </span>
+        </a>
+        <nav class="nav-list">
+          <a href="#dashboard" class="nav-link is-active"><i class="fa-solid fa-table-cells-large"></i><span>Dashboard</span></a>
+          <a href="#add-book" class="nav-link"><i class="fa-solid fa-circle-plus"></i><span>Add Book</span></a>
+          <a href="#progress" class="nav-link"><i class="fa-solid fa-chart-line"></i><span>Progress</span></a>
+          <a href="#notes" class="nav-link"><i class="fa-solid fa-pen-nib"></i><span>Notes</span></a>
+        </nav>
+        <div class="sidebar-card">
+          <span class="ai-dot">✨</span>
+          <p>AI actions are marked with a glow and wired to your FastAPI endpoints.</p>
+        </div>
+      </aside>
+
+      <main class="main mx-auto w-full max-w-[1500px] space-y-5 p-4 sm:p-6">
+        <header class="topbar rounded-lg border border-line/70 bg-panel/75 p-4 shadow-premium backdrop-blur-xl sm:p-5">
+          <div>
+            <p class="eyebrow">Reading command center</p>
+            <h1>The Book Journal & Diary</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-btn" id="refreshBooksBtn" type="button" title="Refresh books" aria-label="Refresh books">
+              <i class="fa-solid fa-rotate"></i>
+            </button>
+            <button class="icon-btn" id="openShareBtn" type="button" title="Open share modal" aria-label="Open share modal">
+              <i class="fa-solid fa-qrcode"></i>
+            </button>
+          </div>
+        </header>
+
+        <section class="auth-panel grid gap-4 rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium md:grid-cols-[260px_minmax(0,1fr)] md:items-end" id="auth">
+          <div>
+            <p class="eyebrow">Account</p>
+            <h2>Connect to the backend</h2>
+          </div>
+          <form class="auth-form grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" id="authForm">
+            <label>
+              <span>Username</span>
+              <input id="username" name="username" autocomplete="username" placeholder="reader@example.com" required>
+            </label>
+            <label>
+              <span>Password</span>
+              <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
+            </label>
+            <div class="auth-actions">
+              <button class="primary-btn" type="submit"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
+              <button class="secondary-btn" id="signupBtn" type="button"><i class="fa-solid fa-user-plus"></i> Sign up</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="stats-grid grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Reading statistics">
+          <article class="stat-tile"><span><i class="fa-solid fa-book"></i></span><p>Books</p><strong id="statBooks">0</strong></article>
+          <article class="stat-tile"><span><i class="fa-solid fa-bookmark"></i></span><p>Notes</p><strong id="statNotes">0</strong></article>
+          <article class="stat-tile"><span><i class="fa-solid fa-layer-group"></i></span><p>Pages read</p><strong id="statPages">0</strong></article>
+          <article class="stat-tile ai-tile"><span>✨</span><p>AI suggestions</p><strong id="statSuggestions">0</strong></article>
+        </section>
+
+        <section class="section-band rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium sm:p-5" id="dashboard">
+          <div class="section-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="eyebrow">Library</p>
+              <h2>Your books</h2>
+            </div>
+            <div class="filter-row grid w-full gap-3 sm:w-auto sm:grid-cols-[240px_180px]">
+              <input id="bookFilter" placeholder="Search library">
+              <select id="tagFilter" aria-label="Filter by tag">
+                <option value="">All tags</option>
+              </select>
+            </div>
+          </div>
+          <div class="book-grid mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3" id="bookGrid" aria-live="polite"></div>
+        </section>
+
+        <section class="workspace-grid grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,.75fr)]">
+          <article class="panel rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium sm:p-5" id="add-book">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">AI & APIs</p>
+                <h2>Add book</h2>
+              </div>
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <form id="bookForm" class="stack mt-4 grid gap-4">
+              <div class="search-combo grid gap-3 rounded-lg border border-line/70 bg-panel2/60 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <input id="bookSearch" placeholder="Search Google Books or ISBN">
+                <button class="secondary-btn" id="lookupBtn" type="button"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+              </div>
+              <div class="lookup-results" id="lookupResults"></div>
+              <div class="grid gap-4 rounded-lg border border-line/70 bg-panel2/50 p-4">
+                <div class="split-fields grid gap-3 md:grid-cols-2">
+                  <label><span>Title</span><input id="bookTitle" required></label>
+                  <label><span>Author</span><input id="bookAuthor"></label>
+                </div>
+                <div class="split-fields grid gap-3 md:grid-cols-2">
+                  <label><span>ISBN</span><input id="bookIsbn"></label>
+                  <label><span>Pages</span><input id="bookPages" inputmode="numeric"></label>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <label><span>Publisher</span><input id="bookPublisher"></label>
+                  <label><span>Cover URL</span><input id="bookCover" type="url"></label>
+                </div>
+                <label><span>Description</span><textarea id="bookDescription" rows="3"></textarea></label>
+                <div class="tag-input" id="tagInput">
+                  <div class="tag-list" id="tagList"></div>
+                  <input id="tagEntry" placeholder="Add category and press Enter">
+                </div>
+              </div>
+              <div class="media-actions grid gap-3 sm:grid-cols-3">
+                <button class="ai-btn bg-gradient-to-r from-tealglow to-aqua text-ink shadow-glow" id="photoBookBtn" type="button"><span>✨</span><i class="fa-solid fa-camera"></i> Add by Photo</button>
+                <button class="ai-btn bg-gradient-to-r from-cyan-400 to-teal-300 text-ink shadow-glow" id="voiceBookBtn" type="button"><span>✨</span><i class="fa-solid fa-microphone"></i> Add by Voice</button>
+                <button class="primary-btn" type="submit"><i class="fa-solid fa-plus"></i> Save Book</button>
+              </div>
+            </form>
+          </article>
+
+          <article class="panel rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium sm:p-5" id="progress">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">AI tracking</p>
+                <h2>Progress</h2>
+              </div>
+              <span class="spark">✨</span>
+            </div>
+            <div class="stack mt-4 grid gap-4">
+              <label><span>Book</span><select id="progressBook"></select></label>
+              <div class="split-fields grid gap-3 sm:grid-cols-2">
+                <label><span>Current page</span><input id="progressPage" type="number" min="0"></label>
+                <label><span>Total pages</span><input id="progressTotal" type="number" min="1"></label>
+              </div>
+              <button class="secondary-btn" id="manualProgressBtn" type="button"><i class="fa-solid fa-check"></i> Track Progress</button>
+              <div class="drop-zone" id="progressDrop">
+                <i class="fa-solid fa-image"></i>
+                <strong>Upload or capture a page photo</strong>
+                <span>Triggers OCR page detection through `/books/{id}/progress/photo`.</span>
+                <input id="progressPhoto" type="file" accept="image/*" capture="environment">
+              </div>
+              <button class="ai-btn bg-gradient-to-r from-tealglow to-aqua text-ink shadow-glow" id="photoProgressBtn" type="button"><span>✨</span><i class="fa-solid fa-sparkles"></i> Process Page Photo</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel notes-panel rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium sm:p-5" id="notes">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Handwritten & voice</p>
+              <h2>Notes</h2>
+            </div>
+            <span class="spark">✨</span>
+          </div>
+          <div class="notes-layout mt-4 grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.7fr)]">
+            <div class="canvas-wrap">
+              <div class="canvas-toolbar mb-3 flex flex-wrap gap-3 rounded-lg border border-line/70 bg-panel2/60 p-3">
+                <select id="notesBook" aria-label="Select note book"></select>
+                <input id="notePage" type="number" min="0" placeholder="Page">
+                <input id="penColor" type="color" value="#f7efe4" aria-label="Pen color">
+                <input id="penSize" type="range" min="2" max="18" value="5" aria-label="Pen size">
+                <button class="icon-btn" id="clearCanvasBtn" type="button" title="Clear canvas" aria-label="Clear canvas"><i class="fa-solid fa-eraser"></i></button>
+              </div>
+              <canvas class="min-h-[360px] w-full rounded-lg border-2 border-aqua/80 bg-slate-950 shadow-glow ring-4 ring-aqua/10" id="notesCanvas" width="1100" height="520" aria-label="Drawing canvas"></canvas>
+            </div>
+            <div class="note-tools grid gap-3 rounded-lg border border-line/70 bg-panel2/50 p-4">
+              <label><span>Typed note</span><textarea id="noteText" rows="6" placeholder="Write or paste a note"></textarea></label>
+              <button class="primary-btn" id="saveNoteBtn" type="button"><i class="fa-solid fa-floppy-disk"></i> Save Note</button>
+              <button class="ai-btn bg-gradient-to-r from-tealglow to-aqua text-ink shadow-glow" id="convertHandwritingBtn" type="button"><span>✨</span><i class="fa-solid fa-file-pen"></i> Convert Handwritten to Text</button>
+              <div class="recorder">
+                <button class="ai-btn bg-gradient-to-r from-cyan-400 to-teal-300 text-ink shadow-glow" id="recordVoiceBtn" type="button"><span>✨</span><i class="fa-solid fa-microphone-lines"></i> Start Voice Note</button>
+                <span id="recordingStatus">Idle</span>
+              </div>
+              <div class="notes-list" id="notesList"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="shareModal" aria-hidden="true">
+      <section class="share-modal rounded-lg border border-line/80 bg-panel p-4 shadow-premium" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">QR & link</p>
+            <h2 id="shareTitle">Share book</h2>
+          </div>
+          <button class="icon-btn" id="closeShareBtn" type="button" aria-label="Close share modal"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <label><span>Book</span><select id="shareBook"></select></label>
+        <div class="qr-box" id="qrBox">
+          <i class="fa-solid fa-qrcode"></i>
+          <span>Dynamic QR code renders here</span>
+        </div>
+        <div class="copy-row">
+          <input id="shareLink" readonly placeholder="Create a sharing link">
+          <button class="secondary-btn" id="copyShareBtn" type="button"><i class="fa-solid fa-copy"></i> Copy</button>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-btn" id="createShareBtn" type="button"><i class="fa-solid fa-link"></i> Create Link/QR</button>
+          <button class="secondary-btn" id="nativeShareModalBtn" type="button"><i class="fa-solid fa-share-nodes"></i> Native Share</button>
+        </div>
+      </section>
+    </div>
+
+    <input id="hiddenPhotoInput" type="file" accept="image/*" capture="environment" hidden>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/app/app.js" defer></script>
+  </body>
+</html>
