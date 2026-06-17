@@ -1,248 +1,1093 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#080b12">
-    <title>The Book Journal & Diary</title>
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <meta name="theme-color" content="#06120f">
+    <title>Book Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
+            fontFamily: {
+              sans: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
+              display: ["Fraunces", "Georgia", "serif"]
+            },
             colors: {
-              ink: "#080b12",
-              panel: "#111827",
-              panel2: "#182132",
-              line: "#273247",
-              parchment: "#f6efe3",
-              aqua: "#22d3ee",
-              tealglow: "#14b8a6",
-              gold: "#f1c96b"
+              night: "#06120f",
+              graphite: "#10171a",
+              mist: "#d7e7df",
+              ember: "#ffb86b"
             },
             boxShadow: {
-              premium: "0 24px 90px rgba(0,0,0,.42)",
-              glow: "0 0 34px rgba(34,211,238,.28)"
+              glow: "0 0 44px rgba(45, 212, 191, .22)",
+              lift: "0 28px 80px rgba(0, 0, 0, .38)"
             }
           }
         }
       };
     </script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link rel="stylesheet" href="/app/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      .glass { background: linear-gradient(145deg, rgba(16, 23, 26, .94), rgba(8, 18, 16, .86)); }
+      .field { width: 100%; border-radius: .75rem; border: 1px solid rgba(148, 163, 184, .22); background: rgba(15, 23, 42, .72); padding: .875rem 1rem; color: #f8fafc; outline: none; transition: border-color .2s, box-shadow .2s, background .2s; }
+      .field:focus { border-color: rgba(45, 212, 191, .85); box-shadow: 0 0 0 4px rgba(45, 212, 191, .12); background: rgba(15, 23, 42, .92); }
+      .btn { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; gap: .5rem; border-radius: .75rem; padding: .75rem 1rem; font-weight: 800; transition: transform .2s, border-color .2s, background .2s, color .2s, box-shadow .2s; }
+      .btn:hover { transform: translateY(-1px); }
+      .btn-primary { background: linear-gradient(135deg, #2dd4bf, #99f6e4); color: #042f2e; box-shadow: 0 18px 44px rgba(45, 212, 191, .28); }
+      .btn-primary:hover { box-shadow: 0 22px 56px rgba(45, 212, 191, .38); }
+      .btn-secondary { border: 1px solid rgba(148, 163, 184, .24); background: rgba(15, 23, 42, .74); color: #d7e7df; }
+      .btn-secondary:hover { border-color: rgba(45, 212, 191, .55); background: rgba(20, 184, 166, .12); color: white; }
+      .btn-danger { border: 1px solid rgba(248, 113, 113, .34); background: rgba(127, 29, 29, .3); color: #fecaca; }
+      .btn-danger:hover { border-color: rgba(248, 113, 113, .72); background: rgba(185, 28, 28, .42); color: white; }
+      .btn-ai { background: linear-gradient(135deg, rgba(20, 184, 166, .96), rgba(251, 191, 36, .9)); color: #082f2a; box-shadow: 0 18px 42px rgba(20, 184, 166, .22); }
+      .btn-ai:hover { box-shadow: 0 22px 52px rgba(251, 191, 36, .18); }
+      .panel { border: 1px solid rgba(148, 163, 184, .18); background: rgba(8, 18, 16, .78); backdrop-filter: blur(18px); }
+      .toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    </style>
   </head>
-  <body class="min-h-screen bg-ink text-parchment antialiased">
-    <div class="app-shell lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside class="sidebar border-line/80 bg-ink/90 backdrop-blur-xl lg:min-h-screen lg:border-r lg:p-6" aria-label="Primary">
-        <a class="brand" href="#dashboard" aria-label="The Book Journal & Diary">
-          <span class="brand-mark"><i class="fa-solid fa-book-open-reader"></i></span>
-          <span>
-            <strong>Book Journal</strong>
-            <small>& Diary</small>
-          </span>
-        </a>
-        <nav class="nav-list">
-          <a href="#dashboard" class="nav-link is-active"><i class="fa-solid fa-table-cells-large"></i><span>Dashboard</span></a>
-          <a href="#add-book" class="nav-link"><i class="fa-solid fa-circle-plus"></i><span>Add Book</span></a>
-          <a href="#progress" class="nav-link"><i class="fa-solid fa-chart-line"></i><span>Progress</span></a>
-          <a href="#notes" class="nav-link"><i class="fa-solid fa-pen-nib"></i><span>Notes</span></a>
-        </nav>
-        <div class="sidebar-card">
-          <span class="ai-dot">✨</span>
-          <p>AI actions are marked with a glow and wired to your FastAPI endpoints.</p>
-        </div>
-      </aside>
+  <body class="min-h-screen overflow-x-hidden bg-night font-sans text-slate-100 antialiased">
+    <div class="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(20,184,166,.22),transparent_32%),linear-gradient(135deg,#06120f_0%,#0f172a_48%,#10110d_100%)]"></div>
+    <div class="fixed inset-0 -z-10 opacity-[.08] [background-image:linear-gradient(rgba(255,255,255,.9)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.9)_1px,transparent_1px)] [background-size:36px_36px]"></div>
 
-      <main class="main mx-auto w-full max-w-[1500px] space-y-5 p-4 sm:p-6">
-        <header class="topbar rounded-lg border border-line/70 bg-panel/75 p-4 shadow-premium backdrop-blur-xl sm:p-5">
-          <div>
-            <p class="eyebrow">Reading command center</p>
-            <h1>The Book Journal & Diary</h1>
-          </div>
-          <div class="topbar-actions">
-            <button class="icon-btn" id="refreshBooksBtn" type="button" title="Refresh books" aria-label="Refresh books">
-              <i class="fa-solid fa-rotate"></i>
-            </button>
-            <button class="icon-btn" id="openShareBtn" type="button" title="Open share modal" aria-label="Open share modal">
-              <i class="fa-solid fa-qrcode"></i>
-            </button>
-          </div>
-        </header>
-
-        <section class="auth-panel grid gap-4 rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium md:grid-cols-[260px_minmax(0,1fr)] md:items-end" id="auth">
-          <div>
-            <p class="eyebrow">Account</p>
-            <h2>Connect to the backend</h2>
-          </div>
-          <form class="auth-form grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" id="authForm">
-            <label>
-              <span>Username</span>
-              <input id="username" name="username" autocomplete="username" placeholder="reader@example.com" required>
-            </label>
-            <label>
-              <span>Password</span>
-              <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
-            </label>
-            <div class="auth-actions">
-              <button class="primary-btn" type="submit"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
-              <button class="secondary-btn" id="signupBtn" type="button"><i class="fa-solid fa-user-plus"></i> Sign up</button>
+    <main id="app" class="min-h-screen">
+      <section id="loginView" class="view min-h-screen px-4 py-8">
+        <div class="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center">
+          <div class="glass w-full rounded-2xl border border-teal-300/15 p-6 shadow-lift sm:p-8">
+            <div class="mb-8">
+              <div class="mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-teal-300 text-2xl font-black text-teal-950 shadow-glow">B</div>
+              <p class="mb-2 text-sm font-bold uppercase tracking-[.22em] text-teal-200/80">Premium library</p>
+              <h1 class="font-display text-4xl font-bold text-white">Book Manager</h1>
+              <p class="mt-3 text-sm leading-6 text-slate-300">Sign in to manage books, reading progress, notes, and shareable reading cards.</p>
             </div>
-          </form>
-        </section>
 
-        <section class="stats-grid grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Reading statistics">
-          <article class="stat-tile"><span><i class="fa-solid fa-book"></i></span><p>Books</p><strong id="statBooks">0</strong></article>
-          <article class="stat-tile"><span><i class="fa-solid fa-bookmark"></i></span><p>Notes</p><strong id="statNotes">0</strong></article>
-          <article class="stat-tile"><span><i class="fa-solid fa-layer-group"></i></span><p>Pages read</p><strong id="statPages">0</strong></article>
-          <article class="stat-tile ai-tile"><span>✨</span><p>AI suggestions</p><strong id="statSuggestions">0</strong></article>
-        </section>
-
-        <section class="section-band rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium sm:p-5" id="dashboard">
-          <div class="section-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p class="eyebrow">Library</p>
-              <h2>Your books</h2>
-            </div>
-            <div class="filter-row grid w-full gap-3 sm:w-auto sm:grid-cols-[240px_180px]">
-              <input id="bookFilter" placeholder="Search library">
-              <select id="tagFilter" aria-label="Filter by tag">
-                <option value="">All tags</option>
-              </select>
-            </div>
-          </div>
-          <div class="book-grid mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3" id="bookGrid" aria-live="polite"></div>
-        </section>
-
-        <section class="workspace-grid grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,.75fr)]">
-          <article class="panel rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium sm:p-5" id="add-book">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">AI & APIs</p>
-                <h2>Add book</h2>
-              </div>
-              <i class="fa-solid fa-wand-magic-sparkles"></i>
-            </div>
-            <form id="bookForm" class="stack mt-4 grid gap-4">
-              <div class="search-combo grid gap-3 rounded-lg border border-line/70 bg-panel2/60 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <input id="bookSearch" placeholder="Search Google Books or ISBN">
-                <button class="secondary-btn" id="lookupBtn" type="button"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
-              </div>
-              <div class="lookup-results" id="lookupResults"></div>
-              <div class="grid gap-4 rounded-lg border border-line/70 bg-panel2/50 p-4">
-                <div class="split-fields grid gap-3 md:grid-cols-2">
-                  <label><span>Title</span><input id="bookTitle" required></label>
-                  <label><span>Author</span><input id="bookAuthor"></label>
-                </div>
-                <div class="split-fields grid gap-3 md:grid-cols-2">
-                  <label><span>ISBN</span><input id="bookIsbn"></label>
-                  <label><span>Pages</span><input id="bookPages" inputmode="numeric"></label>
-                </div>
-                <div class="grid gap-3 md:grid-cols-2">
-                  <label><span>Publisher</span><input id="bookPublisher"></label>
-                  <label><span>Cover URL</span><input id="bookCover" type="url"></label>
-                </div>
-                <label><span>Description</span><textarea id="bookDescription" rows="3"></textarea></label>
-                <div class="tag-input" id="tagInput">
-                  <div class="tag-list" id="tagList"></div>
-                  <input id="tagEntry" placeholder="Add category and press Enter">
-                </div>
-              </div>
-              <div class="media-actions grid gap-3 sm:grid-cols-3">
-                <button class="ai-btn bg-gradient-to-r from-tealglow to-aqua text-ink shadow-glow" id="photoBookBtn" type="button"><span>✨</span><i class="fa-solid fa-camera"></i> Add by Photo</button>
-                <button class="ai-btn bg-gradient-to-r from-cyan-400 to-teal-300 text-ink shadow-glow" id="voiceBookBtn" type="button"><span>✨</span><i class="fa-solid fa-microphone"></i> Add by Voice</button>
-                <button class="primary-btn" type="submit"><i class="fa-solid fa-plus"></i> Save Book</button>
-              </div>
+            <form id="loginForm" class="space-y-4">
+              <label class="block">
+                <span class="mb-2 block text-sm font-bold text-slate-200">Username or email</span>
+                <input id="loginEmail" class="field" name="username" type="text" autocomplete="username" placeholder="Enter username or email" required>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-bold text-slate-200">Password</span>
+                <input id="loginPassword" class="field" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+              </label>
+              <button class="btn btn-primary w-full" type="submit">Login</button>
+              <button id="signupBtn" class="btn btn-secondary w-full" type="button">Create Account</button>
             </form>
-          </article>
-
-          <article class="panel rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium sm:p-5" id="progress">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">AI tracking</p>
-                <h2>Progress</h2>
-              </div>
-              <span class="spark">✨</span>
-            </div>
-            <div class="stack mt-4 grid gap-4">
-              <label><span>Book</span><select id="progressBook"></select></label>
-              <div class="split-fields grid gap-3 sm:grid-cols-2">
-                <label><span>Current page</span><input id="progressPage" type="number" min="0"></label>
-                <label><span>Total pages</span><input id="progressTotal" type="number" min="1"></label>
-              </div>
-              <button class="secondary-btn" id="manualProgressBtn" type="button"><i class="fa-solid fa-check"></i> Track Progress</button>
-              <div class="drop-zone" id="progressDrop">
-                <i class="fa-solid fa-image"></i>
-                <strong>Upload or capture a page photo</strong>
-                <span>Triggers OCR page detection through `/books/{id}/progress/photo`.</span>
-                <input id="progressPhoto" type="file" accept="image/*" capture="environment">
-              </div>
-              <button class="ai-btn bg-gradient-to-r from-tealglow to-aqua text-ink shadow-glow" id="photoProgressBtn" type="button"><span>✨</span><i class="fa-solid fa-sparkles"></i> Process Page Photo</button>
-            </div>
-          </article>
-        </section>
-
-        <section class="panel notes-panel rounded-lg border border-line/80 bg-panel/90 p-4 shadow-premium sm:p-5" id="notes">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Handwritten & voice</p>
-              <h2>Notes</h2>
-            </div>
-            <span class="spark">✨</span>
           </div>
-          <div class="notes-layout mt-4 grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.7fr)]">
-            <div class="canvas-wrap">
-              <div class="canvas-toolbar mb-3 flex flex-wrap gap-3 rounded-lg border border-line/70 bg-panel2/60 p-3">
-                <select id="notesBook" aria-label="Select note book"></select>
-                <input id="notePage" type="number" min="0" placeholder="Page">
-                <input id="penColor" type="color" value="#f7efe4" aria-label="Pen color">
-                <input id="penSize" type="range" min="2" max="18" value="5" aria-label="Pen size">
-                <button class="icon-btn" id="clearCanvasBtn" type="button" title="Clear canvas" aria-label="Clear canvas"><i class="fa-solid fa-eraser"></i></button>
-              </div>
-              <canvas class="min-h-[360px] w-full rounded-lg border-2 border-aqua/80 bg-slate-950 shadow-glow ring-4 ring-aqua/10" id="notesCanvas" width="1100" height="520" aria-label="Drawing canvas"></canvas>
-            </div>
-            <div class="note-tools grid gap-3 rounded-lg border border-line/70 bg-panel2/50 p-4">
-              <label><span>Typed note</span><textarea id="noteText" rows="6" placeholder="Write or paste a note"></textarea></label>
-              <button class="primary-btn" id="saveNoteBtn" type="button"><i class="fa-solid fa-floppy-disk"></i> Save Note</button>
-              <button class="ai-btn bg-gradient-to-r from-tealglow to-aqua text-ink shadow-glow" id="convertHandwritingBtn" type="button"><span>✨</span><i class="fa-solid fa-file-pen"></i> Convert Handwritten to Text</button>
-              <div class="recorder">
-                <button class="ai-btn bg-gradient-to-r from-cyan-400 to-teal-300 text-ink shadow-glow" id="recordVoiceBtn" type="button"><span>✨</span><i class="fa-solid fa-microphone-lines"></i> Start Voice Note</button>
-                <span id="recordingStatus">Idle</span>
-              </div>
-              <div class="notes-list" id="notesList"></div>
-            </div>
-          </div>
-        </section>
-      </main>
-    </div>
-
-    <div class="modal-backdrop" id="shareModal" aria-hidden="true">
-      <section class="share-modal rounded-lg border border-line/80 bg-panel p-4 shadow-premium" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">QR & link</p>
-            <h2 id="shareTitle">Share book</h2>
-          </div>
-          <button class="icon-btn" id="closeShareBtn" type="button" aria-label="Close share modal"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-        <label><span>Book</span><select id="shareBook"></select></label>
-        <div class="qr-box" id="qrBox">
-          <i class="fa-solid fa-qrcode"></i>
-          <span>Dynamic QR code renders here</span>
-        </div>
-        <div class="copy-row">
-          <input id="shareLink" readonly placeholder="Create a sharing link">
-          <button class="secondary-btn" id="copyShareBtn" type="button"><i class="fa-solid fa-copy"></i> Copy</button>
-        </div>
-        <div class="modal-actions">
-          <button class="primary-btn" id="createShareBtn" type="button"><i class="fa-solid fa-link"></i> Create Link/QR</button>
-          <button class="secondary-btn" id="nativeShareModalBtn" type="button"><i class="fa-solid fa-share-nodes"></i> Native Share</button>
         </div>
       </section>
-    </div>
+
+      <section id="dashboardView" class="view hidden min-h-screen pb-28">
+        <nav class="sticky top-0 z-30 border-b border-white/10 bg-night/86 px-4 py-3 backdrop-blur-xl">
+          <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
+            <button class="flex items-center gap-3 text-left" type="button" onclick="showDashboard()">
+              <span class="grid h-11 w-11 place-items-center rounded-xl bg-teal-300 font-black text-teal-950">B</span>
+              <span>
+                <span class="block font-display text-xl font-bold text-white">Book Manager</span>
+                <span class="block text-xs font-bold uppercase tracking-[.18em] text-teal-200/70">Dashboard</span>
+              </span>
+            </button>
+            <div class="flex items-center gap-2">
+              <button class="btn btn-secondary hidden sm:inline-flex" type="button" onclick="refreshBooks()">Refresh</button>
+              <button class="btn btn-secondary" type="button" onclick="showLogin()">Logout</button>
+            </div>
+          </div>
+        </nav>
+
+        <div class="mx-auto max-w-7xl px-4 py-6 sm:py-8">
+          <div class="mb-6">
+            <p class="text-sm font-bold uppercase tracking-[.22em] text-ember/80">Reading command center</p>
+            <h2 class="mt-2 font-display text-4xl font-bold text-white sm:text-5xl">Your Library</h2>
+          </div>
+
+          <div class="mb-7 grid grid-cols-2 gap-3 sm:gap-4">
+            <article class="panel rounded-xl p-4 shadow-glow sm:p-5">
+              <p class="text-sm font-semibold text-slate-400">Books</p>
+              <strong id="booksStat" class="mt-2 block text-3xl font-black text-white">0</strong>
+            </article>
+            <article class="panel rounded-xl p-4 shadow-glow sm:p-5">
+              <p class="text-sm font-semibold text-slate-400">Pages Read</p>
+              <strong id="pagesStat" class="mt-2 block text-3xl font-black text-white">0</strong>
+            </article>
+          </div>
+
+          <div class="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <p class="text-sm font-bold uppercase tracking-[.2em] text-teal-200/70">Library</p>
+              <h3 class="mt-1 text-2xl font-extrabold text-white">Book shelf</h3>
+            </div>
+            <input id="librarySearch" class="field max-w-xs" type="search" placeholder="Search books">
+          </div>
+
+          <div id="bookGrid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+        </div>
+
+        <button class="btn btn-primary fixed bottom-5 right-5 z-40 h-16 rounded-full px-6 text-base sm:bottom-8 sm:right-8" type="button" onclick="showAddBook()">
+          <span class="text-2xl leading-none">+</span>
+          Add New Book
+        </button>
+      </section>
+
+      <section id="bookFormView" class="view hidden min-h-screen pb-12">
+        <nav class="sticky top-0 z-30 border-b border-white/10 bg-night/86 px-4 py-3 backdrop-blur-xl">
+          <div class="mx-auto flex max-w-5xl items-center justify-between">
+            <button class="btn btn-secondary" type="button" onclick="showDashboard()">Back</button>
+            <span id="formModeLabel" class="text-sm font-bold uppercase tracking-[.2em] text-teal-200/80">Add Book</span>
+          </div>
+        </nav>
+
+        <div class="mx-auto max-w-5xl px-4 py-6 sm:py-8">
+          <div class="mb-7">
+            <p class="text-sm font-bold uppercase tracking-[.22em] text-ember/80">Register or rename</p>
+            <h2 id="formTitle" class="mt-2 font-display text-4xl font-bold text-white">Add a New Book</h2>
+          </div>
+
+          <form id="bookForm" class="panel space-y-5 rounded-2xl p-4 shadow-lift sm:p-6">
+            <div id="addBookTools" class="space-y-4">
+            <div class="rounded-xl border border-teal-300/15 bg-slate-950/45 p-4">
+              <label class="block">
+                <span class="mb-2 block text-sm font-bold text-slate-200">Search Google Books API</span>
+                <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <input id="googleSearch" class="field" type="search" placeholder="Search by title, author, keyword, or ISBN">
+                  <button id="googleSearchBtn" class="btn btn-secondary" type="button">Search</button>
+                </div>
+              </label>
+              <div id="googleResults" class="mt-4 grid gap-3"></div>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+              <button id="photoBookBtn" class="btn btn-ai" type="button">✨ Add by Photo</button>
+              <button id="voiceBookBtn" class="btn btn-ai" type="button">✨ Add by Voice</button>
+            </div>
+
+            <div class="rounded-xl border border-teal-300/15 bg-slate-950/45 p-4">
+              <label class="block">
+                <span class="mb-2 block text-sm font-bold text-slate-200">Import from shared link</span>
+                <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <input id="shareImportUrl" class="field" type="url" placeholder="http://127.0.0.1:8000/share/token">
+                  <button id="importShareBtn" class="btn btn-secondary" type="button">Import</button>
+                </div>
+              </label>
+            </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block">
+                <span class="mb-2 block text-sm font-bold text-slate-200">Title</span>
+                <input id="bookTitleInput" class="field" required>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-bold text-slate-200">Author</span>
+                <input id="bookAuthorInput" class="field">
+              </label>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block">
+                <span class="mb-2 block text-sm font-bold text-slate-200">Tags</span>
+                <input id="bookTagsInput" class="field" placeholder="fiction, design, research">
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-bold text-slate-200">Pages</span>
+                <input id="bookPagesInput" class="field" inputmode="numeric" placeholder="320">
+              </label>
+            </div>
+
+            <input id="bookIsbnInput" type="hidden">
+            <input id="bookPublisherInput" type="hidden">
+            <input id="bookCoverInput" type="hidden">
+            <textarea id="bookDescriptionInput" class="hidden"></textarea>
+
+            <div class="grid gap-3 pt-2 sm:grid-cols-2">
+              <button class="btn btn-primary" type="submit">Save</button>
+              <button class="btn btn-secondary" type="button" onclick="showDashboard()">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="bookDetailsView" class="view hidden min-h-screen pb-12">
+        <nav class="sticky top-0 z-30 border-b border-white/10 bg-night/86 px-4 py-3 backdrop-blur-xl">
+          <div class="mx-auto flex max-w-6xl items-center justify-between gap-3">
+            <button class="btn btn-secondary" type="button" onclick="showDashboard()">Back</button>
+            <button class="btn btn-primary" type="button" onclick="showAddBook(currentBookId)">Edit Book</button>
+          </div>
+        </nav>
+
+        <div class="mx-auto max-w-6xl px-4 py-6 sm:py-8">
+          <header class="mb-7 grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
+            <div id="detailsCover" class="grid h-36 w-28 place-items-center overflow-hidden rounded-xl border border-teal-300/20 bg-teal-300/10 text-4xl shadow-glow">📖</div>
+            <div>
+              <p class="text-sm font-bold uppercase tracking-[.22em] text-ember/80">Book Details & Notes</p>
+              <h2 id="detailsTitle" class="mt-2 font-display text-4xl font-bold text-white">Select a book</h2>
+              <p id="detailsAuthor" class="mt-2 text-slate-300">Unknown author</p>
+            </div>
+          </header>
+
+          <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div class="space-y-5">
+              <section class="panel rounded-2xl p-4 shadow-lift sm:p-5">
+                <div class="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p class="text-sm font-bold uppercase tracking-[.2em] text-teal-200/70">Progress Tracker</p>
+                    <h3 class="mt-1 text-2xl font-extrabold text-white">Reading progress</h3>
+                  </div>
+                  <span id="progressPercent" class="rounded-full border border-teal-300/30 bg-teal-300/10 px-3 py-1 text-sm font-extrabold text-teal-100">0%</span>
+                </div>
+                <div class="mb-4 h-3 overflow-hidden rounded-full bg-slate-800">
+                  <div id="progressBar" class="h-full w-0 rounded-full bg-gradient-to-r from-teal-300 to-ember transition-all"></div>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <input id="currentPageInput" class="field" type="number" min="0" placeholder="Current page">
+                  <input id="totalPagesInput" class="field" type="number" min="1" placeholder="Total pages">
+                  <button id="saveProgressBtn" class="btn btn-secondary sm:col-span-2" type="button">Save Progress</button>
+                </div>
+                <label class="mt-4 grid cursor-pointer place-items-center rounded-2xl border border-dashed border-teal-300/35 bg-teal-300/5 p-6 text-center transition hover:border-teal-200 hover:bg-teal-300/10">
+                  <input id="progressPhotoInput" class="sr-only" type="file" accept="image/*" capture="environment">
+                  <span class="text-3xl">✨</span>
+                  <span class="mt-2 block font-extrabold text-white">✨ Track Progress by Page Photo</span>
+                  <span class="mt-1 block text-sm text-slate-400">Upload a page photo for OCR page detection.</span>
+                </label>
+              </section>
+
+              <section class="panel rounded-2xl p-4 shadow-lift sm:p-5">
+                <p class="text-sm font-bold uppercase tracking-[.2em] text-teal-200/70">Notes Section</p>
+                <h3 class="mt-1 text-2xl font-extrabold text-white">Typed, voice, and handwritten notes</h3>
+                <div class="mt-4 grid gap-4">
+                  <textarea id="typedNoteInput" class="field min-h-36" placeholder="Type a note for this book"></textarea>
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <button id="saveTypedNoteBtn" class="btn btn-primary" type="button">Save Typed Note</button>
+                    <button id="voiceNoteBtn" class="btn btn-ai" type="button">✨ Voice Notes</button>
+                  </div>
+                  <div class="rounded-2xl border border-teal-300/20 bg-slate-950/55 p-3">
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                      <span class="font-extrabold text-white">Handwritten Notes</span>
+                      <button id="clearCanvasBtn" class="btn btn-secondary min-h-10 px-3 py-2" type="button">Clear</button>
+                    </div>
+                    <canvas id="handwritingCanvas" class="block h-64 w-full touch-none rounded-xl border border-white/10 bg-slate-950" width="960" height="420"></canvas>
+                    <button id="convertCanvasBtn" class="btn btn-ai mt-3 w-full" type="button">✨ Convert to Text</button>
+                  </div>
+                  <div id="notesList" class="grid gap-3"></div>
+                </div>
+              </section>
+            </div>
+
+            <aside class="panel h-max rounded-2xl p-4 shadow-lift sm:p-5">
+              <p class="text-sm font-bold uppercase tracking-[.2em] text-teal-200/70">Share Section</p>
+              <h3 class="mt-1 text-2xl font-extrabold text-white">Dynamic share</h3>
+              <div id="qrPlaceholder" class="mt-5 grid aspect-square place-items-center rounded-2xl border border-dashed border-teal-300/35 bg-slate-950/60 p-6 text-center">
+                <div>
+                  <div class="mx-auto grid h-28 w-28 place-items-center rounded-xl bg-white text-5xl text-slate-950">▦</div>
+                  <p class="mt-4 text-sm font-semibold text-slate-400">Dynamic QR Code placeholder</p>
+                </div>
+              </div>
+              <input id="shareLinkInput" class="field mt-4" readonly placeholder="Share link appears here">
+              <div class="mt-3 grid gap-3">
+                <button id="createShareBtn" class="btn btn-secondary" type="button">Create QR Link</button>
+                <button id="copyLinkBtn" class="btn btn-primary" type="button">Copy Link</button>
+                <button id="nativeShareBtn" class="btn btn-ai" type="button">✨ Native Share</button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </main>
 
     <input id="hiddenPhotoInput" type="file" accept="image/*" capture="environment" hidden>
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/app/app.js" defer></script>
+    <div id="toast" class="toast pointer-events-none fixed bottom-5 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 translate-y-3 rounded-xl border border-teal-300/25 bg-slate-950/95 px-4 py-3 text-sm font-bold text-white opacity-0 shadow-lift transition sm:bottom-8"></div>
+
+    <script>
+      const API_BASE = "http://127.0.0.1:8000";
+      const sampleBooks = [
+        {
+          id: "sample-1",
+          title: "The Design of Everyday Things",
+          author: "Don Norman",
+          pages: "368",
+          tags: ["design", "ux"],
+          cover_url: "",
+          latest_progress: { current_page: 144, total_pages: 368, percentage: 39 }
+        },
+        {
+          id: "sample-2",
+          title: "Atomic Habits",
+          author: "James Clear",
+          pages: "320",
+          tags: ["productivity"],
+          cover_url: "",
+          latest_progress: { current_page: 220, total_pages: 320, percentage: 69 }
+        },
+        {
+          id: "sample-3",
+          title: "Deep Work",
+          author: "Cal Newport",
+          pages: "304",
+          tags: ["focus"],
+          cover_url: "",
+          latest_progress: { current_page: 88, total_pages: 304, percentage: 29 }
+        }
+      ];
+
+      let books = [];
+      let notes = [];
+      let token = localStorage.getItem("bookManagerToken") || "";
+      let currentBookId = null;
+      let editingBookId = null;
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let bookVoiceRecognition = null;
+      let noteVoiceRecognition = null;
+      let noteVoiceTranscript = "";
+      let aiFeatureStatus = null;
+
+      const views = {
+        login: document.getElementById("loginView"),
+        dashboard: document.getElementById("dashboardView"),
+        form: document.getElementById("bookFormView"),
+        details: document.getElementById("bookDetailsView")
+      };
+
+      const $ = (id) => document.getElementById(id);
+
+      function showToast(message) {
+        const toast = $("toast");
+        toast.textContent = message;
+        toast.classList.add("show");
+        window.clearTimeout(showToast.timer);
+        showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 3200);
+      }
+
+      function showView(name) {
+        Object.values(views).forEach((view) => view.classList.add("hidden"));
+        views[name].classList.remove("hidden");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      function showLogin() {
+        localStorage.removeItem("bookManagerToken");
+        token = "";
+        showView("login");
+      }
+
+      async function showDashboard() {
+        showView("dashboard");
+        await refreshBooks();
+      }
+
+      function showAddBook(bookId = null) {
+        editingBookId = bookId;
+        const book = books.find((item) => String(item.id) === String(bookId));
+        $("formModeLabel").textContent = book ? "Edit Book" : "Add Book";
+        $("formTitle").textContent = book ? "Edit Book" : "Add a New Book";
+        $("addBookTools").classList.toggle("hidden", Boolean(book));
+        $("bookTitleInput").value = book?.title || "";
+        $("bookAuthorInput").value = book?.author || "";
+        $("bookTagsInput").value = (book?.tags || []).join(", ");
+        $("bookPagesInput").value = book?.pages || "";
+        $("bookIsbnInput").value = book?.isbn || "";
+        $("bookPublisherInput").value = book?.publisher || "";
+        $("bookCoverInput").value = book?.cover_url || "";
+        $("bookDescriptionInput").value = book?.description || "";
+        $("googleSearch").value = "";
+        $("shareImportUrl").value = "";
+        $("googleResults").innerHTML = "";
+        showView("form");
+      }
+
+      async function showBookDetails(bookId) {
+        currentBookId = bookId;
+        const book = books.find((item) => String(item.id) === String(bookId));
+        if (!book) return;
+        const progress = getProgress(book);
+        $("detailsTitle").textContent = book.title;
+        $("detailsAuthor").textContent = book.author || "Unknown author";
+        $("detailsCover").innerHTML = book.cover_url
+          ? `<img class="h-full w-full object-cover" src="${escapeHtml(book.cover_url)}" alt="${escapeHtml(book.title)} cover">`
+          : "📖";
+        $("progressPercent").textContent = `${progress.percent}%`;
+        $("progressBar").style.width = `${progress.percent}%`;
+        $("currentPageInput").value = progress.current || "";
+        $("totalPagesInput").value = progress.total || book.pages || "";
+        $("shareLinkInput").value = "";
+        $("qrPlaceholder").innerHTML = `<div><div class="mx-auto grid h-28 w-28 place-items-center rounded-xl bg-white text-5xl text-slate-950">▦</div><p class="mt-4 text-sm font-semibold text-slate-400">Dynamic QR Code placeholder</p></div>`;
+        showView("details");
+        await loadNotes();
+      }
+
+      async function api(path, options = {}) {
+        const headers = new Headers(options.headers || {});
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+        if (options.body && !(options.body instanceof FormData) && !(options.body instanceof Blob) && !headers.has("Content-Type")) {
+          headers.set("Content-Type", "application/json");
+        }
+        let response;
+        try {
+          response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+        } catch (error) {
+          throw new Error("Backend is unreachable. Start the FastAPI server on http://127.0.0.1:8000 and try again.");
+        }
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(Array.isArray(error.detail) ? error.detail.map((item) => item.msg).join(", ") : error.detail);
+        }
+        return response.status === 204 ? null : response.json();
+      }
+
+      function escapeHtml(value = "") {
+        return String(value).replace(/[&<>"']/g, (char) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;"
+        })[char]);
+      }
+
+      function normalizeIsbn(value = "") {
+        return String(value).toUpperCase().replace(/[^0-9X]/g, "");
+      }
+
+      function getSpeechRecognition() {
+        return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+      }
+
+      async function getAiFeatureStatus() {
+        if (!aiFeatureStatus) {
+          aiFeatureStatus = await api("/ai/status").catch(() => null);
+        }
+        return aiFeatureStatus;
+      }
+
+      async function ensureOcrAvailable() {
+        const status = await getAiFeatureStatus();
+        if (status?.ocr?.tesseract_available || status?.ocr?.easyocr_available) return true;
+        const hint = status?.ocr?.tesseract_install_hint || "Install Tesseract OCR to use photo, handwriting, and page OCR.";
+        showToast(hint);
+        return false;
+      }
+
+      function getProgress(book) {
+        const latest = book.latest_progress || {};
+        const total = Number(latest.total_pages || book.pages || 0);
+        const current = Number(latest.current_page || 0);
+        const percent = latest.percentage ?? (total ? Math.round((current / total) * 100) : 0);
+        return { current, total, percent: Math.max(0, Math.min(100, Number(percent) || 0)) };
+      }
+
+      async function refreshBooks() {
+        if (!token) {
+          books = [];
+          renderDashboard();
+          return;
+        }
+        try {
+          books = await api("/books");
+        } catch (error) {
+          showToast(error.message || "Could not load books");
+          books = [];
+        }
+        renderDashboard();
+      }
+
+      function renderDashboard() {
+        const query = $("librarySearch").value.trim().toLowerCase();
+        const visibleBooks = books.filter((book) => [book.title, book.author, ...(book.tags || [])].join(" ").toLowerCase().includes(query));
+        const pagesRead = books.reduce((sum, book) => sum + getProgress(book).current, 0);
+        $("booksStat").textContent = books.length;
+        $("pagesStat").textContent = pagesRead;
+        $("bookGrid").innerHTML = visibleBooks.length ? visibleBooks.map(renderBookCard).join("") : `
+          <article class="panel rounded-xl p-5 text-slate-300">No books found. Use the floating button to add a new book.</article>
+        `;
+      }
+
+      function renderBookCard(book) {
+        const progress = getProgress(book);
+        const tags = (book.tags || []).map((tag) => `<span class="rounded-full bg-teal-300/10 px-2.5 py-1 text-xs font-bold text-teal-100">${escapeHtml(tag)}</span>`).join("");
+        const cover = book.cover_url
+          ? `<img class="h-full w-full object-cover" src="${escapeHtml(book.cover_url)}" alt="${escapeHtml(book.title)} cover">`
+          : `<span class="text-3xl">📖</span>`;
+        return `
+          <article class="panel group rounded-2xl p-4 shadow-lift transition hover:border-teal-300/45 hover:bg-slate-950/60">
+            <div class="grid grid-cols-[5.25rem_minmax(0,1fr)] gap-4">
+              <div class="grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-white/10 bg-teal-300/10">${cover}</div>
+              <div class="min-w-0">
+                <h4 class="line-clamp-2 text-lg font-extrabold text-white">${escapeHtml(book.title)}</h4>
+                <p class="mt-1 truncate text-sm font-semibold text-slate-400">${escapeHtml(book.author || "Unknown author")}</p>
+                <div class="mt-3 flex flex-wrap gap-2">${tags}</div>
+              </div>
+            </div>
+            <div class="mt-4">
+              <div class="h-2 overflow-hidden rounded-full bg-slate-800">
+                <div class="h-full rounded-full bg-gradient-to-r from-teal-300 to-ember" style="width:${progress.percent}%"></div>
+              </div>
+              <p class="mt-2 text-xs font-bold text-slate-400">${progress.current} / ${progress.total || "?"} pages</p>
+            </div>
+            <div class="mt-4 grid grid-cols-3 gap-2">
+              <button class="btn btn-secondary min-h-10 px-2 py-2 text-sm" type="button" onclick="showAddBook('${book.id}')">Edit</button>
+              <button class="btn btn-danger min-h-10 px-2 py-2 text-sm" type="button" onclick="deleteBook('${book.id}')">Delete</button>
+              <button class="btn btn-primary min-h-10 px-2 py-2 text-sm" type="button" onclick="showBookDetails('${book.id}')">View Details</button>
+            </div>
+          </article>
+        `;
+      }
+
+      async function deleteBook(bookId) {
+        if (!confirm("Delete this book?")) return;
+        if (!token || String(bookId).startsWith("sample-")) {
+          books = books.filter((book) => String(book.id) !== String(bookId));
+          renderDashboard();
+          return;
+        }
+        try {
+          await api(`/books/${bookId}`, { method: "DELETE" });
+          await refreshBooks();
+          showToast("Book deleted");
+        } catch (error) {
+          showToast(error.message || "Could not delete book");
+        }
+      }
+
+      function payloadFromForm() {
+        return {
+          title: $("bookTitleInput").value.trim(),
+          author: $("bookAuthorInput").value.trim() || null,
+          isbn: $("bookIsbnInput").value.trim() || null,
+          publisher: $("bookPublisherInput").value.trim() || null,
+          pages: $("bookPagesInput").value.trim() || null,
+          description: $("bookDescriptionInput").value.trim() || null,
+          cover_url: $("bookCoverInput").value.trim() || null,
+          source: "manual",
+          tags: $("bookTagsInput").value.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean)
+        };
+      }
+
+      async function saveBook(event) {
+        event.preventDefault();
+        const payload = payloadFromForm();
+        if (!payload.title) return showToast("Title is required");
+        if (!token) {
+          if (editingBookId) {
+            books = books.map((book) => String(book.id) === String(editingBookId) ? { ...book, ...payload } : book);
+          } else {
+            books.unshift({ id: crypto.randomUUID(), latest_progress: null, ...payload });
+          }
+          showDashboard();
+          return;
+        }
+        try {
+          if (editingBookId) {
+            await api(`/books/${editingBookId}`, { method: "PATCH", body: JSON.stringify(payload) });
+          } else {
+            await api("/books", { method: "POST", body: JSON.stringify(payload) });
+          }
+          await showDashboard();
+          showToast("Book saved");
+        } catch (error) {
+          showToast(error.message || "Could not save book");
+        }
+      }
+
+      async function searchGoogleBooks() {
+        const query = $("googleSearch").value.trim();
+        const isbn = normalizeIsbn(query);
+        const isIsbn = isbn.length === 10 || isbn.length === 13;
+        if (!query) return showToast("Enter a title, author, keyword, or ISBN");
+        $("googleResults").innerHTML = `<div class="rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm font-bold text-slate-300">Searching ${isIsbn ? "ISBN sources" : "Google Books"}...</div>`;
+        try {
+          const result = isIsbn
+            ? await api(`/lookup/isbn/${encodeURIComponent(isbn)}`)
+            : await api(`/lookup/google?q=${encodeURIComponent(query)}&limit=5`);
+          const matches = isIsbn ? result.matches || [] : result;
+          const warning = isIsbn && result.errors?.length
+            ? `<div class="rounded-xl border border-amber-300/25 bg-amber-300/10 p-3 text-xs font-bold text-amber-100">${escapeHtml(result.errors.join(" | "))}</div>`
+            : "";
+          $("googleResults").innerHTML = matches.length ? matches.map((book, index) => `
+            <button class="grid rounded-xl border border-white/10 bg-slate-950/60 p-3 text-left transition hover:border-teal-300/50 hover:bg-teal-300/10" type="button" onclick="fillBookFromGoogle(${index})">
+              <span class="font-extrabold text-white">${escapeHtml(book.title || "Untitled")}</span>
+              <span class="text-sm text-slate-400">${escapeHtml(book.author || "Unknown author")}</span>
+              <span class="text-xs font-bold text-slate-500">ISBN: ${escapeHtml(book.isbn || "unknown")} · Pages: ${escapeHtml(book.pages || "unknown")}</span>
+            </button>
+          `).join("") + warning : `${warning}<div class="rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm font-bold text-slate-300">No matches found.</div>`;
+          window.googleBookMatches = matches;
+        } catch (error) {
+          $("googleResults").innerHTML = "";
+          showToast(error.message || "Book lookup failed");
+        }
+      }
+
+      function fillBookFromGoogle(index) {
+        const book = (window.googleBookMatches || [])[index];
+        if (!book) return;
+        $("bookTitleInput").value = book.title || "";
+        $("bookAuthorInput").value = book.author || "";
+        $("bookTagsInput").value = (book.tags || []).join(", ");
+        $("bookPagesInput").value = book.pages || "";
+        $("bookIsbnInput").value = book.isbn || "";
+        $("bookPublisherInput").value = book.publisher || "";
+        $("bookCoverInput").value = book.cover_url || "";
+        $("bookDescriptionInput").value = book.description || "";
+        showToast("Book details filled from Google Books");
+      }
+
+      async function importSharedBook() {
+        const url = $("shareImportUrl").value.trim();
+        if (!url) return showToast("Paste a shared book link first");
+        if (!token) return showToast("Create an account or log in before importing shared books");
+        try {
+          const imported = await api("/books/import/share", {
+            method: "POST",
+            body: JSON.stringify({ url })
+          });
+          $("shareImportUrl").value = "";
+          await refreshBooks();
+          showToast(`Imported "${imported.title}" with ${(imported.notes || []).length} notes`);
+          showDashboard();
+        } catch (error) {
+          showToast(error.message || "Could not import shared book");
+        }
+      }
+
+      async function recognizeBookFromPhoto() {
+        const file = $("hiddenPhotoInput").files[0];
+        if (!file) return;
+        if (!(await ensureOcrAvailable())) {
+          $("hiddenPhotoInput").value = "";
+          return;
+        }
+        $("googleResults").innerHTML = `<div class="rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm font-bold text-slate-300">Processing photo with OCR...</div>`;
+        try {
+          const data = await api("/books/photo/recognize", {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: await file.arrayBuffer()
+          });
+          window.googleBookMatches = data.matches || [];
+          if (data.matches?.[0]) {
+            fillBookFromGoogle(0);
+            $("googleResults").innerHTML = data.matches.map((book, index) => `
+              <button class="grid rounded-xl border border-white/10 bg-slate-950/60 p-3 text-left transition hover:border-teal-300/50 hover:bg-teal-300/10" type="button" onclick="fillBookFromGoogle(${index})">
+                <span class="font-extrabold text-white">${escapeHtml(book.title || "Untitled")}</span>
+                <span class="text-sm text-slate-400">${escapeHtml(book.author || "Unknown author")}</span>
+              </button>
+            `).join("");
+          } else {
+            $("googleResults").innerHTML = `<div class="rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm font-bold text-slate-300">OCR ran, but no matching books were returned.</div>`;
+          }
+          showToast("Photo processed");
+        } catch (error) {
+          $("googleResults").innerHTML = "";
+          showToast(error.message || "Photo recognition failed");
+        } finally {
+          $("hiddenPhotoInput").value = "";
+        }
+      }
+
+      function toggleBookVoiceSearch() {
+        if (bookVoiceRecognition) {
+          bookVoiceRecognition.stop();
+          return;
+        }
+        const Recognition = getSpeechRecognition();
+        if (!Recognition) {
+          showToast("Live voice search is not supported in this browser. Use Chrome/Edge or install ffmpeg for backend audio conversion.");
+          return;
+        }
+
+        const recognition = new Recognition();
+        let transcript = "";
+        bookVoiceRecognition = recognition;
+        recognition.lang = "bg-BG";
+        recognition.interimResults = true;
+        recognition.continuous = false;
+        $("voiceBookBtn").textContent = "Listening... tap to stop";
+        recognition.onresult = (event) => {
+          transcript = Array.from(event.results).map((result) => result[0].transcript).join(" ").trim();
+          if (transcript) $("googleSearch").value = transcript;
+        };
+        recognition.onerror = () => showToast("Voice search could not understand the audio");
+        recognition.onend = async () => {
+          bookVoiceRecognition = null;
+          $("voiceBookBtn").textContent = "Add by Voice";
+          if (!transcript) return showToast("No voice input detected");
+          await searchGoogleBooks();
+        };
+        recognition.start();
+      }
+
+      async function saveProgress() {
+        const book = books.find((item) => String(item.id) === String(currentBookId));
+        if (!book) return;
+        const currentPage = Number($("currentPageInput").value || 0);
+        const totalPages = Number($("totalPagesInput").value || book.pages || 0) || null;
+        if (!token || String(currentBookId).startsWith("sample-")) {
+          book.latest_progress = { current_page: currentPage, total_pages: totalPages, percentage: totalPages ? Math.round((currentPage / totalPages) * 100) : 0 };
+          showBookDetails(currentBookId);
+          return;
+        }
+        try {
+          await api(`/books/${currentBookId}/progress`, { method: "POST", body: JSON.stringify({ current_page: currentPage, total_pages: totalPages, source: "manual" }) });
+          await refreshBooks();
+          await showBookDetails(currentBookId);
+          showToast("Progress saved");
+        } catch (error) {
+          showToast(error.message || "Could not save progress");
+        }
+      }
+
+      async function uploadProgressPhoto() {
+        const file = $("progressPhotoInput").files[0];
+        if (!file || !currentBookId) return;
+        if (!(await ensureOcrAvailable())) {
+          $("progressPhotoInput").value = "";
+          return;
+        }
+        try {
+          await api(`/books/${currentBookId}/progress/photo`, {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: await file.arrayBuffer()
+          });
+          await refreshBooks();
+          await showBookDetails(currentBookId);
+          showToast("✨ Progress tracked from page photo");
+        } catch (error) {
+          showToast(error.message || "OCR progress failed");
+        }
+      }
+
+      async function loadNotes() {
+        if (!currentBookId || !token || String(currentBookId).startsWith("sample-")) {
+          renderNotes();
+          return;
+        }
+        try {
+          notes = await api(`/books/${currentBookId}/notes`);
+        } catch (error) {
+          notes = [];
+          showToast(error.message || "Could not load notes");
+        }
+        renderNotes();
+      }
+
+      function renderNotes() {
+        $("notesList").innerHTML = notes.length ? notes.map((note) => `
+          <article class="rounded-xl border border-white/10 bg-slate-950/55 p-3">
+            <p class="text-sm leading-6 text-slate-200">${escapeHtml(note.text)}</p>
+            <p class="mt-2 text-xs font-bold uppercase tracking-[.16em] text-teal-200/60">${escapeHtml(note.note_type || "manual")}${note.page ? ` · Page ${note.page}` : ""}</p>
+            <div class="mt-3 flex gap-2">
+              <button class="btn btn-secondary min-h-9 px-3 py-1 text-xs" type="button" onclick="editNote('${note.id}')">Edit</button>
+              <button class="btn btn-danger min-h-9 px-3 py-1 text-xs" type="button" onclick="deleteNote('${note.id}')">Delete</button>
+            </div>
+          </article>
+        `).join("") : `<div class="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm font-bold text-slate-400">No notes yet.</div>`;
+      }
+
+      async function saveTypedNote(text, noteType = "manual") {
+        const cleanText = text.trim();
+        if (!cleanText || !currentBookId) return showToast("Write a note first");
+        if (!token || String(currentBookId).startsWith("sample-")) {
+          notes.unshift({ id: crypto.randomUUID(), text: cleanText, note_type: noteType, page: null });
+          $("typedNoteInput").value = "";
+          renderNotes();
+          return;
+        }
+        try {
+          await api(`/books/${currentBookId}/notes`, { method: "POST", body: JSON.stringify({ text: cleanText, note_type: noteType }) });
+          $("typedNoteInput").value = "";
+          await loadNotes();
+          showToast("Note saved");
+        } catch (error) {
+          showToast(error.message || "Could not save note");
+        }
+      }
+
+      async function editNote(noteId) {
+        const note = notes.find((item) => String(item.id) === String(noteId));
+        if (!note) return;
+        const updatedText = prompt("Edit note", note.text || "");
+        if (updatedText === null) return;
+        const cleanText = updatedText.trim();
+        if (!cleanText) return showToast("Note text cannot be empty");
+
+        if (!token || String(currentBookId).startsWith("sample-")) {
+          note.text = cleanText;
+          renderNotes();
+          showToast("Note updated");
+          return;
+        }
+
+        try {
+          await api(`/books/${currentBookId}/notes/${noteId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ text: cleanText })
+          });
+          await loadNotes();
+          showToast("Note updated");
+        } catch (error) {
+          showToast(error.message || "Could not update note");
+        }
+      }
+
+      async function deleteNote(noteId) {
+        if (!confirm("Delete this note?")) return;
+        if (!token || String(currentBookId).startsWith("sample-")) {
+          notes = notes.filter((item) => String(item.id) !== String(noteId));
+          renderNotes();
+          showToast("Note deleted");
+          return;
+        }
+
+        try {
+          await api(`/books/${currentBookId}/notes/${noteId}`, { method: "DELETE" });
+          await loadNotes();
+          showToast("Note deleted");
+        } catch (error) {
+          showToast(error.message || "Could not delete note");
+        }
+      }
+
+      async function convertCanvasToText() {
+        const canvas = $("handwritingCanvas");
+        if (!currentBookId) return;
+        if (!(await ensureOcrAvailable())) return;
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+          if (!token || String(currentBookId).startsWith("sample-")) {
+            await saveTypedNote("Converted handwritten note placeholder.", "handwritten_canvas");
+            return;
+          }
+          try {
+            await api(`/books/${currentBookId}/notes/photo?is_handwritten=true`, {
+              method: "POST",
+              headers: { "Content-Type": "application/octet-stream" },
+              body: await blob.arrayBuffer()
+            });
+            await loadNotes();
+            showToast("✨ Handwriting converted to text");
+          } catch (error) {
+            showToast(error.message || "Handwriting conversion failed");
+          }
+        }, "image/png");
+      }
+
+      async function toggleVoiceNote() {
+        if (mediaRecorder?.state === "recording") {
+          mediaRecorder.stop();
+          return;
+        }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioChunks = [];
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
+          mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach((track) => track.stop());
+            const blob = new Blob(audioChunks, { type: "audio/webm" });
+            if (!token || String(currentBookId).startsWith("sample-")) {
+              await saveTypedNote("Voice note transcript placeholder.", "voice");
+              return;
+            }
+            try {
+              await api(`/books/${currentBookId}/notes/voice?audio_format=webm`, {
+                method: "POST",
+                headers: { "Content-Type": "application/octet-stream" },
+                body: await blob.arrayBuffer()
+              });
+              await loadNotes();
+              showToast("✨ Voice note saved");
+            } catch (error) {
+              showToast(error.message || "Voice note failed");
+            }
+          };
+          mediaRecorder.start();
+          showToast("Recording voice note. Tap again to stop.");
+        } catch (error) {
+          showToast("Microphone access was not granted");
+        }
+      }
+
+      async function toggleLiveVoiceNote() {
+        if (!currentBookId) return showToast("Select a book first");
+        if (noteVoiceRecognition) {
+          noteVoiceRecognition.stop();
+          return;
+        }
+        const Recognition = getSpeechRecognition();
+        if (!Recognition) {
+          showToast("Voice notes need Chrome/Edge speech recognition, or install ffmpeg for backend audio conversion.");
+          return;
+        }
+
+        const recognition = new Recognition();
+        noteVoiceRecognition = recognition;
+        noteVoiceTranscript = "";
+        recognition.lang = "bg-BG";
+        recognition.interimResults = true;
+        recognition.continuous = true;
+        $("voiceNoteBtn").textContent = "Stop Voice Note";
+        recognition.onresult = (event) => {
+          noteVoiceTranscript = Array.from(event.results).map((result) => result[0].transcript).join(" ").trim();
+          $("typedNoteInput").value = noteVoiceTranscript;
+        };
+        recognition.onerror = () => showToast("Voice note could not understand the audio");
+        recognition.onend = async () => {
+          noteVoiceRecognition = null;
+          $("voiceNoteBtn").textContent = "Voice Notes";
+          if (!noteVoiceTranscript.trim()) return showToast("No voice note text detected");
+          await saveTypedNote(noteVoiceTranscript, "voice_browser");
+          showToast("Voice note transcribed and saved");
+        };
+        recognition.start();
+        showToast("Voice note is on. Tap Stop Voice Note to finish.");
+      }
+
+      async function createShareLink() {
+        if (!currentBookId) return;
+        if (!token || String(currentBookId).startsWith("sample-")) {
+          $("shareLinkInput").value = `${location.origin}/share/demo-${currentBookId}`;
+          showToast("Demo share link created");
+          return;
+        }
+        try {
+          const share = await api(`/books/${currentBookId}/share`, { method: "POST" });
+          $("shareLinkInput").value = share.share_url;
+          $("qrPlaceholder").innerHTML = `<img class="h-full w-full rounded-xl bg-white object-contain p-4" src="${escapeHtml(share.qr_url)}" alt="Dynamic QR Code">`;
+          showToast("Share link created");
+        } catch (error) {
+          showToast(error.message || "Could not create share link");
+        }
+      }
+
+      async function copyShareLink() {
+        const link = $("shareLinkInput").value;
+        if (!link) return showToast("Create a share link first");
+        await navigator.clipboard.writeText(link);
+        showToast("Link copied");
+      }
+
+      async function nativeShare() {
+        const book = books.find((item) => String(item.id) === String(currentBookId));
+        const link = $("shareLinkInput").value || location.href;
+        if (!navigator.share) return showToast("Native share is not available on this device");
+        await navigator.share({ title: book?.title || "Book Manager", text: "Shared from Book Manager", url: link });
+      }
+
+      function initCanvas() {
+        const canvas = $("handwritingCanvas");
+        const ctx = canvas.getContext("2d");
+        let drawing = false;
+
+        function point(event) {
+          const rect = canvas.getBoundingClientRect();
+          const source = event.touches ? event.touches[0] : event;
+          return {
+            x: (source.clientX - rect.left) * (canvas.width / rect.width),
+            y: (source.clientY - rect.top) * (canvas.height / rect.height)
+          };
+        }
+
+        function start(event) {
+          event.preventDefault();
+          drawing = true;
+          const p = point(event);
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+        }
+
+        function move(event) {
+          if (!drawing) return;
+          event.preventDefault();
+          const p = point(event);
+          ctx.lineWidth = 6;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.strokeStyle = "#f8fafc";
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        }
+
+        function stop() {
+          drawing = false;
+        }
+
+        canvas.addEventListener("mousedown", start);
+        canvas.addEventListener("mousemove", move);
+        window.addEventListener("mouseup", stop);
+        canvas.addEventListener("touchstart", start, { passive: false });
+        canvas.addEventListener("touchmove", move, { passive: false });
+        canvas.addEventListener("touchend", stop);
+        $("clearCanvasBtn").addEventListener("click", () => ctx.clearRect(0, 0, canvas.width, canvas.height));
+      }
+
+      $("loginForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = new URLSearchParams();
+        form.set("username", $("loginEmail").value);
+        form.set("password", $("loginPassword").value);
+        try {
+          const response = await fetch(`${API_BASE}/token`, { method: "POST", body: form });
+          if (response.ok) {
+            const data = await response.json();
+            token = data.access_token;
+            if (!token) throw new Error("Login response did not include an access token");
+            localStorage.setItem("bookManagerToken", token);
+            await showDashboard();
+          } else {
+            const error = await response.json().catch(() => ({ detail: response.statusText }));
+            showToast(error.detail || "Login API rejected credentials");
+          }
+        } catch (error) {
+          showToast(error.message || "Backend unavailable");
+        }
+      });
+
+      $("signupBtn").addEventListener("click", async () => {
+        const username = $("loginEmail").value.trim();
+        const password = $("loginPassword").value;
+        if (!username || !password) return showToast("Enter a username and password first");
+        try {
+          const query = new URLSearchParams({ username, password });
+          await api(`/signup?${query.toString()}`, { method: "POST" });
+          showToast("Account created. Logging in...");
+          $("loginForm").requestSubmit();
+        } catch (error) {
+          showToast(error.message || "Could not create account");
+        }
+      });
+
+      $("librarySearch").addEventListener("input", renderDashboard);
+      $("bookForm").addEventListener("submit", saveBook);
+      $("googleSearchBtn").addEventListener("click", searchGoogleBooks);
+      $("importShareBtn").addEventListener("click", importSharedBook);
+      $("saveProgressBtn").addEventListener("click", saveProgress);
+      $("progressPhotoInput").addEventListener("change", uploadProgressPhoto);
+      $("saveTypedNoteBtn").addEventListener("click", () => saveTypedNote($("typedNoteInput").value, "manual"));
+      $("convertCanvasBtn").addEventListener("click", convertCanvasToText);
+      $("voiceNoteBtn").addEventListener("click", toggleLiveVoiceNote);
+      $("createShareBtn").addEventListener("click", createShareLink);
+      $("copyLinkBtn").addEventListener("click", copyShareLink);
+      $("nativeShareBtn").addEventListener("click", nativeShare);
+      $("photoBookBtn").addEventListener("click", () => $("hiddenPhotoInput").click());
+      $("voiceBookBtn").addEventListener("click", () => showToast("✨ Voice book capture is ready for backend transcription."));
+      $("hiddenPhotoInput").addEventListener("change", () => showToast("✨ Photo book capture is ready for OCR recognition."));
+
+      const cleanVoiceBookBtn = $("voiceBookBtn").cloneNode(true);
+      $("voiceBookBtn").replaceWith(cleanVoiceBookBtn);
+      cleanVoiceBookBtn.addEventListener("click", toggleBookVoiceSearch);
+
+      const cleanPhotoInput = $("hiddenPhotoInput").cloneNode(true);
+      $("hiddenPhotoInput").replaceWith(cleanPhotoInput);
+      cleanPhotoInput.addEventListener("change", recognizeBookFromPhoto);
+
+      initCanvas();
+      if (token) {
+        showDashboard();
+      } else {
+        showView("login");
+      }
+    </script>
   </body>
 </html>

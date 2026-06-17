@@ -38,6 +38,94 @@ class BookFlowIntegrationTest(unittest.TestCase):
         main.engine.dispose()
         self.temp_dir.cleanup()
 
+    def test_google_lookup_falls_back_to_open_library(self):
+        fallback_match = {
+            "title": "Twilight",
+            "author": "Stephenie Meyer",
+            "isbn": "9780316015844",
+            "publisher": "Little, Brown",
+            "pages": "498",
+            "description": None,
+            "cover_url": None,
+            "source": "open_library",
+            "tags": [],
+        }
+
+        with patch.object(main, "_google_books_search", return_value=[]), patch.object(
+            main, "_open_library_search", return_value=[fallback_match]
+        ):
+            response = self.client.get("/lookup/google", params={"q": "twilight", "limit": 5})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [fallback_match])
+
+    def test_book_photo_recognition_uses_uploaded_bytes(self):
+        match = {
+            "title": "Twilight",
+            "author": "Stephenie Meyer",
+            "isbn": "9780316015844",
+            "publisher": "Little, Brown",
+            "pages": "498",
+            "description": None,
+            "cover_url": None,
+            "source": "open_library",
+            "tags": [],
+        }
+
+        with patch.object(main, "extract_text_from_image", return_value="twilight"), patch.object(
+            main, "_lookup_google_matches", return_value=[match]
+        ):
+            response = self.client.post(
+                "/books/photo/recognize",
+                content=b"fake-image-bytes",
+                headers={"Content-Type": "application/octet-stream"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["ocr_text"], "twilight")
+        self.assertEqual(response.json()["matches"], [match])
+
+    def test_import_shared_book_copies_notes(self):
+        owner = db_models.User(username="owner", hashed_password="hash")
+        recipient = db_models.User(username="recipient", hashed_password=main.get_password_hash("pw"))
+        db = self.session_local()
+        try:
+            db.add_all([owner, recipient])
+            db.commit()
+            source_book = db_models.Book(
+                title="Shared Book",
+                author="Reader",
+                isbn="9780316015844",
+                pages="498",
+                owner_id=owner.id,
+            )
+            db.add(source_book)
+            db.flush()
+            db.add(db_models.Note(book_id=source_book.id, owner_id=owner.id, text="Shared note", page=12))
+            link = db_models.ShareLink(book_id=source_book.id, token="shared-token")
+            db.add(link)
+            db.commit()
+        finally:
+            db.close()
+
+        token_response = self.client.post("/token", data={"username": "recipient", "password": "pw"})
+        auth_headers = {"Authorization": f"Bearer {token_response.json()['access_token']}"}
+
+        public_response = self.client.get("/share/shared-token")
+        self.assertEqual(public_response.status_code, 200)
+        self.assertEqual(public_response.json()["notes"][0]["text"], "Shared note")
+
+        import_response = self.client.post(
+            "/books/import/share",
+            json={"url": "http://127.0.0.1:8000/share/shared-token"},
+            headers=auth_headers,
+        )
+        self.assertEqual(import_response.status_code, 201)
+        imported = import_response.json()
+        self.assertEqual(imported["title"], "Shared Book")
+        self.assertEqual(imported["notes"][0]["text"], "Shared note")
+        self.assertEqual(imported["notes"][0]["page"], 12)
+
     def test_signup_search_add_book_add_progress_from_photo(self):
         username = "integration_user"
         password = "strong-password"

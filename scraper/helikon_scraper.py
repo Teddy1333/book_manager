@@ -177,11 +177,31 @@ def extract_book_info(book_url):
         }
 
 
-def search_books(query, limit=5):
-    search_url = f"{BASE_URL}/search/?q={quote(query)}"
-    urls = extract_book_urls(search_url)[:limit]
-    books = [extract_book_info(url) for url in urls]
-    return books
+def search_books(search_query: str, book_database: list | None = None, limit: int = 5) -> list:
+    """
+    Searches for books by Title or ISBN.
+    Supports case-insensitive and partial matches.
+    """
+    if not search_query:
+        return []
+
+    if book_database is None:
+        search_url = f"{BASE_URL}/search/?q={quote(search_query)}"
+        urls = extract_book_urls(search_url)[:limit]
+        return [extract_book_info(url) for url in urls]
+
+    query_lower = search_query.lower().strip()
+    search_results = []
+
+    for book in book_database:
+        title = str(book.get("Title", "")).lower()
+        isbn = str(book.get("ISBN", "")).lower()
+
+        # Check for partial matches in either title or ISBN
+        if query_lower in title or query_lower in isbn:
+            search_results.append(book)
+
+    return search_results
 
 
 if __name__ == "__main__":

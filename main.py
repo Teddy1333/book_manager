@@ -1,10 +1,11 @@
+import os
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, time
 from os import getenv
 from pathlib import Path
 from secrets import token_urlsafe
 from typing import Annotated
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import requests
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, status
@@ -18,7 +19,9 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from ai.ocr import extract_text_from_image
+from bs4 import BeautifulSoup
+
+from ai.ocr import extract_text_from_image, ocr_status
 from ai.speech import transcribe_audio
 from ai.suggestions import suggest_books_for_user
 from database import db_models
@@ -107,6 +110,17 @@ class NoteIn(BaseModel):
     note_type: str = "manual"
 
 
+class NoteUpdate(BaseModel):
+    text: str | None = Field(default=None, min_length=1)
+    page: int | None = Field(default=None, ge=0)
+    note_type: str | None = None
+
+
+class ShareImportIn(BaseModel):
+    url: str | None = None
+    token: str | None = None
+
+
 class VoiceNoteIn(BaseModel):
     page: int | None = Field(default=None, ge=0)
     audio_format: str = "wav"
@@ -183,6 +197,15 @@ def serialize_note(note: db_models.Note) -> dict:
     }
 
 
+def serialize_shared_book(book: db_models.Book) -> dict:
+    data = serialize_book(book)
+    data["notes"] = [
+        serialize_note(note)
+        for note in sorted(book.notes, key=lambda item: item.created_at, reverse=True)
+    ]
+    return data
+
+
 def normalize_isbn(value: str | None) -> str:
     if not value:
         return ""
@@ -196,6 +219,13 @@ def _pages_as_int(value: str | None) -> int | None:
     return int(digits) if digits else None
 
 
+def _log_lookup_warning(message: str) -> None:
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        print(message.encode("ascii", "replace").decode("ascii"))
+
+
 def _get_book_for_user(db: Session, book_id: int, user_id: int) -> db_models.Book:
     book = (
         db.query(db_models.Book)
@@ -205,6 +235,21 @@ def _get_book_for_user(db: Session, book_id: int, user_id: int) -> db_models.Boo
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     return book
+
+
+def _get_note_for_user(db: Session, book_id: int, note_id: int, user_id: int) -> db_models.Note:
+    note = (
+        db.query(db_models.Note)
+        .filter(
+            db_models.Note.id == note_id,
+            db_models.Note.book_id == book_id,
+            db_models.Note.owner_id == user_id,
+        )
+        .first()
+    )
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return note
 
 
 def _set_tags(db: Session, book: db_models.Book, tag_names: list[str]) -> None:
@@ -235,23 +280,84 @@ def _ensure_unique_isbn(
         raise HTTPException(status_code=409, detail="Book with this ISBN already exists")
 
 
-def _google_books_search(query: str, limit: int = 5) -> list[dict]:
-    response = requests.get(
-        "https://www.googleapis.com/books/v1/volumes",
-        params={"q": query, "maxResults": limit},
-        timeout=10,
+def _share_token_from_value(value: str | None) -> str:
+    if not value or not value.strip():
+        raise HTTPException(status_code=422, detail="Share URL or token is required")
+
+    cleaned = value.strip()
+    parsed = urlparse(cleaned)
+    path = parsed.path if parsed.scheme or parsed.netloc else cleaned
+    parts = [part for part in path.strip("/").split("/") if part]
+    if len(parts) >= 2 and parts[-2] == "share":
+        return parts[-1]
+    if len(parts) == 1:
+        return parts[0]
+    raise HTTPException(status_code=422, detail="Share URL must look like /share/{token}")
+
+
+def _import_shared_book(payload: ShareImportIn, db: Session, user: db_models.User) -> dict:
+    token = _share_token_from_value(payload.token or payload.url)
+    link = db.query(db_models.ShareLink).filter(db_models.ShareLink.token == token).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    source = link.book
+    _ensure_unique_isbn(db, user.id, source.isbn)
+    book = db_models.Book(
+        title=source.title,
+        author=source.author,
+        isbn=source.isbn,
+        publisher=source.publisher,
+        pages=source.pages,
+        description=source.description,
+        cover_url=source.cover_url,
+        source="shared_import",
+        owner_id=user.id,
     )
-    response.raise_for_status()
-    results = []
-    for item in response.json().get("items", []):
-        info = item.get("volumeInfo", {})
-        identifiers = info.get("industryIdentifiers", [])
-        isbn = next(
-            (entry.get("identifier") for entry in identifiers if entry.get("type") in {"ISBN_13", "ISBN_10"}),
-            None,
+    _set_tags(db, book, [tag.name for tag in source.tags])
+    db.add(book)
+    db.flush()
+
+    for source_note in sorted(source.notes, key=lambda item: item.created_at):
+        db.add(
+            db_models.Note(
+                book_id=book.id,
+                owner_id=user.id,
+                text=source_note.text,
+                page=source_note.page,
+                note_type=f"shared_{source_note.note_type or 'note'}",
+                image_path=source_note.image_path,
+                audio_path=source_note.audio_path,
+            )
         )
-        results.append(
-            {
+
+    db.commit()
+    db.refresh(book)
+    return serialize_shared_book(book)
+
+
+def _google_books_search(query: str, limit: int = 5) -> list[dict]:
+    try:
+        response = requests.get(
+            "https://www.googleapis.com/books/v1/volumes",
+            params={"q": query, "maxResults": limit},
+            timeout=5,
+        )
+        if response.status_code in [429, 503]:
+            _log_lookup_warning(f"Google Books unavailable ({response.status_code}); trying fallback providers.")
+            return []
+
+        response.raise_for_status()
+
+        results = []
+        for item in response.json().get("items", []):
+            info = item.get("volumeInfo", {})
+            identifiers = info.get("industryIdentifiers", [])
+            isbn = next(
+                (entry.get("identifier") for entry in identifiers if entry.get("type") in {"ISBN_13", "ISBN_10"}),
+                None,
+            )
+            results.append({
                 "title": info.get("title"),
                 "author": ", ".join(info.get("authors", [])) or None,
                 "isbn": normalize_isbn(isbn) or None,
@@ -261,35 +367,299 @@ def _google_books_search(query: str, limit: int = 5) -> list[dict]:
                 "cover_url": info.get("imageLinks", {}).get("thumbnail"),
                 "source": "google_books",
                 "tags": info.get("categories", []),
+            })
+        return results
+
+    except Exception as e:
+        _log_lookup_warning(f"Google Books lookup failed: {e}")
+        return []
+
+
+def _open_library_search(query: str, limit: int = 5) -> list[dict]:
+    params = {"limit": limit}
+    normalized_isbn = normalize_isbn(query.removeprefix("isbn:"))
+    if normalized_isbn and len(normalized_isbn) in {10, 13}:
+        params["isbn"] = normalized_isbn
+    else:
+        params["title"] = query
+
+    try:
+        response = requests.get(
+            "http://openlibrary.org/search.json",
+            params=params,
+            headers={"User-Agent": "book-manager/1.0"},
+            timeout=10,
+        )
+        response.raise_for_status()
+    except Exception as e:
+        _log_lookup_warning(f"Open Library lookup failed: {e}")
+        return []
+
+    results = []
+    for item in response.json().get("docs", [])[:limit]:
+        edition = _open_library_edition_details(item)
+        isbn = (
+            edition.get("isbn")
+            or next((normalize_isbn(value) for value in item.get("isbn", []) if normalize_isbn(value)), None)
+        )
+        cover_id = item.get("cover_i")
+        results.append(
+            {
+                "title": edition.get("title") or item.get("title"),
+                "author": edition.get("author") or ", ".join(item.get("author_name", [])) or None,
+                "isbn": isbn,
+                "publisher": edition.get("publisher") or next((value for value in item.get("publisher", []) if value), None),
+                "pages": edition.get("pages")
+                or (str(item.get("number_of_pages_median")) if item.get("number_of_pages_median") else None),
+                "description": edition.get("description"),
+                "cover_url": f"http://covers.openlibrary.org/b/id/{cover_id}-M.jpg" if cover_id else None,
+                "source": "open_library",
+                "tags": item.get("subject", [])[:5],
             }
         )
-    return results
+    return [book for book in results if book["title"]]
+
+
+def _open_library_edition_details(item: dict) -> dict:
+    edition_keys = []
+    if item.get("cover_edition_key"):
+        edition_keys.append(item["cover_edition_key"])
+    edition_keys.extend(item.get("edition_key", [])[:2])
+
+    for key in dict.fromkeys(edition_keys):
+        try:
+            response = requests.get(
+                f"http://openlibrary.org/books/{key}.json",
+                headers={"User-Agent": "book-manager/1.0"},
+                timeout=5,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            _log_lookup_warning(f"Open Library edition lookup failed for {key}: {e}")
+            continue
+
+        description = data.get("description")
+        if isinstance(description, dict):
+            description = description.get("value")
+
+        isbn = next(
+            (
+                normalize_isbn(value)
+                for value in [*data.get("isbn_13", []), *data.get("isbn_10", [])]
+                if normalize_isbn(value)
+            ),
+            None,
+        )
+
+        details = {
+            "title": data.get("title"),
+            "author": None,
+            "isbn": isbn,
+            "publisher": next((value for value in data.get("publishers", []) if value), None),
+            "pages": str(data.get("number_of_pages")) if data.get("number_of_pages") else None,
+            "description": description if isinstance(description, str) else None,
+        }
+        if not details["pages"] or not details["isbn"]:
+            work_details = _open_library_work_edition_details(item.get("key"))
+            details = {key: value or work_details.get(key) for key, value in details.items()}
+        return details
+
+    return _open_library_work_edition_details(item.get("key"))
+
+
+def _open_library_work_edition_details(work_key: str | None) -> dict:
+    if not work_key:
+        return {}
+    try:
+        response = requests.get(
+            f"http://openlibrary.org{work_key}/editions.json",
+            params={"limit": 50},
+            headers={"User-Agent": "book-manager/1.0"},
+            timeout=7,
+        )
+        response.raise_for_status()
+        entries = response.json().get("entries", [])
+    except Exception as e:
+        _log_lookup_warning(f"Open Library work editions lookup failed for {work_key}: {e}")
+        return {}
+
+    preferred_entries = [edition for edition in entries if edition.get("number_of_pages")] or entries
+    for edition in preferred_entries:
+        pages = edition.get("number_of_pages")
+        isbn = next(
+            (
+                normalize_isbn(value)
+                for value in [*edition.get("isbn_13", []), *edition.get("isbn_10", [])]
+                if normalize_isbn(value)
+            ),
+            None,
+        )
+        if pages or isbn:
+            description = edition.get("description")
+            if isinstance(description, dict):
+                description = description.get("value")
+            return {
+                "title": edition.get("title"),
+                "author": None,
+                "isbn": isbn,
+                "publisher": next((value for value in edition.get("publishers", []) if value), None),
+                "pages": str(pages) if pages else None,
+                "description": description if isinstance(description, str) else None,
+            }
+
+    return {}
+
+
+def _lookup_google_matches(q: str, limit: int = 5) -> list[dict]:
+    matches = _google_books_search(q, limit=limit)
+
+    if not matches:
+        matches = _open_library_search(q, limit=limit)
+
+    if not matches:
+        try:
+            matches = _helikon_search(q, limit=limit)
+        except Exception as exc:
+            _log_lookup_warning(f"Helikon lookup failed: {exc}")
+            matches = []
+
+    return matches
+
+#def _google_books_search(query: str, limit: int = 5) -> list[dict]:
+#    response = requests.get(
+#        "https://www.googleapis.com/books/v1/volumes",
+#        params={"q": query, "maxResults": limit},
+#        timeout=10,
+#    )
+#    response.raise_for_status()
+#    results = []
+#    for item in response.json().get("items", []):
+#        info = item.get("volumeInfo", {})
+#        identifiers = info.get("industryIdentifiers", [])
+#        isbn = next(
+#            (entry.get("identifier") for entry in identifiers if entry.get("type") in {"ISBN_13", "ISBN_10"}),
+#            None,
+#        )
+#        results.append(
+#            {
+#                "title": info.get("title"),
+#                "author": ", ".join(info.get("authors", [])) or None,
+#                "isbn": normalize_isbn(isbn) or None,
+#                "publisher": info.get("publisher"),
+#                "pages": str(info.get("pageCount")) if info.get("pageCount") else None,
+#                "description": info.get("description"),
+#                "cover_url": info.get("imageLinks", {}).get("thumbnail"),
+#                "source": "google_books",
+#                "tags": info.get("categories", []),
+#            }
+#        )
+#    return results
+
+
+def _isbnsearch_lookup(isbn: str) -> list[dict]:
+    response = requests.get(
+        f"https://isbnsearch.org/isbn/{quote(isbn)}",
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=10,
+    )
+    if response.status_code == 404:
+        return []
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    info = soup.select_one(".bookinfo")
+    title = soup.select_one(".bookinfo h1")
+    image = soup.select_one(".image img")
+    if not info or not title:
+        return []
+
+    details = {}
+    for paragraph in info.select("p"):
+        label, separator, value = paragraph.get_text(" ", strip=True).partition(":")
+        if separator:
+            details[label.strip().lower()] = value.strip()
+
+    book_isbn = normalize_isbn(details.get("isbn-13") or details.get("isbn-10") or isbn)
+    return [
+        {
+            "title": title.get_text(" ", strip=True),
+            "author": details.get("author"),
+            "isbn": book_isbn or isbn,
+            "publisher": details.get("publisher"),
+            "pages": None,
+            "description": None,
+            "cover_url": image.get("src") if image else None,
+            "source": "isbnsearch",
+            "tags": [],
+        }
+    ]
 
 
 def _helikon_search(query: str, limit: int = 5) -> list[dict]:
     import importlib
 
     scraper = importlib.import_module("scraper.helikon_scraper")
-    return scraper.search_books(query, limit=limit)
+    return scraper.search_books(query)
 
 
-def _search_isbn(db: Session, isbn: str, limit: int = 5) -> dict:
-    isbn = normalize_isbn(isbn)
-    local_books = (
-        db.query(db_models.Book)
-        .filter(db_models.Book.isbn == isbn)
-        .order_by(db_models.Book.title)
-        .all()
-    )
+# Заменяме или допълваме съществуващата _search_isbn с тази универсална логика
+def _search_books(db: Session, query: str, limit: int = 5) -> dict:
+    """
+    Универсална функция, която решава дали търсим по ISBN или по заглавие/автор.
+    """
+    # Проверка дали заявката е ISBN (числа, 10 или 13 символа)
+    clean_query = normalize_isbn(query)
+    is_isbn = clean_query and len(clean_query) in {10, 13}
+
+    # 1. Търсене в локалната база
+    if is_isbn:
+        local_books = db.query(db_models.Book).filter(db_models.Book.isbn == clean_query).all()
+    else:
+        # Търсене по заглавие или автор, ако не е ISBN
+        like = f"%{query}%"
+        local_books = db.query(db_models.Book).filter(
+            or_(db_models.Book.title.ilike(like), db_models.Book.author.ilike(like))
+        ).limit(limit).all()
+
     if local_books:
         return {"source": "local", "matches": [serialize_book(book) for book in local_books]}
 
-    google_matches = _google_books_search(f"isbn:{isbn}", limit=limit)
-    if google_matches:
-        return {"source": "google_books", "matches": google_matches}
+    # 2. Външно търсене (ако не е намерено локално)
+    errors = []
 
-    helikon_matches = _helikon_search(isbn, limit=limit)
-    return {"source": "helikon" if helikon_matches else "none", "matches": helikon_matches}
+    # Ако е ISBN, търсим първо с ISBN-специфичните методи
+    if is_isbn:
+        try:
+            matches = _isbnsearch_lookup(clean_query)
+            if matches: return {"source": "isbnsearch", "matches": matches}
+        except Exception as e:
+            errors.append(f"ISBNSearch failed: {e}")
+
+    # Общо търсене в Google (работи и за ISBN, и за заглавия)
+    try:
+        search_term = f"isbn:{clean_query}" if is_isbn else query
+        google_matches = _google_books_search(search_term, limit=limit)
+        if google_matches:
+            return {"source": "google_books", "matches": google_matches}
+    except Exception as e:
+        errors.append(f"Google Books failed: {e}")
+
+    try:
+        open_library_matches = _open_library_search(clean_query if is_isbn else query, limit=limit)
+        if open_library_matches:
+            return {"source": "open_library", "matches": open_library_matches}
+    except Exception as e:
+        errors.append(f"Open Library failed: {e}")
+
+    # Fallback към Хеликон
+    try:
+        helikon_matches = _helikon_search(query, limit=limit)
+        if helikon_matches:
+            return {"source": "helikon", "matches": helikon_matches}
+    except Exception as e:
+        errors.append(f"Helikon failed: {e}")
+    return {"source": "none", "matches": [], "errors": errors}
 
 
 def _latest_progress_by_book(books: list[db_models.Book]) -> dict[int, db_models.ReadingProgress]:
@@ -373,6 +743,15 @@ def api_overview():
 )
 def health_check():
     return {"status": "ok", "time": datetime.now(UTC).isoformat()}
+
+
+@app.get(
+    "/ai/status",
+    summary="AI feature status",
+    description="Reports local OCR dependency availability for photo and handwriting features.",
+)
+def ai_status():
+    return {"ocr": ocr_status()}
 
 
 @app.post(
@@ -459,6 +838,20 @@ def list_books(
     return [serialize_book(book) for book in query.order_by(db_models.Book.title).all()]
 
 
+@app.post(
+    "/books/import/share",
+    status_code=201,
+    summary="Import shared book",
+    description="Imports a book and its notes from another user's public share link.",
+)
+def import_shared_book(
+    payload: ShareImportIn,
+    db: Session = Depends(get_db),
+    user: db_models.User = Depends(get_current_user),
+):
+    return _import_shared_book(payload, db, user)
+
+
 @app.get(
     "/books/{book_id}",
     summary="Get book",
@@ -519,8 +912,7 @@ def delete_book(
     description="Searches Google Books by title, author, keyword, or ISBN query.",
 )
 def lookup_google(q: str, limit: int = Query(default=5, ge=1, le=20)):
-    return _google_books_search(q, limit=limit)
-
+    return _lookup_google_matches(q, limit=limit)
 
 @app.get(
     "/lookup/isbn/{isbn}",
@@ -528,7 +920,7 @@ def lookup_google(q: str, limit: int = Query(default=5, ge=1, le=20)):
     description="Looks for an ISBN locally first, then Google Books, then Helikon.",
 )
 def lookup_isbn(isbn: str, db: Session = Depends(get_db)):
-    return _search_isbn(db, isbn, limit=5)
+    return _search_books(db, isbn, limit=5)
 
 
 @app.get(
@@ -571,7 +963,10 @@ def import_google_book(
     db: Session = Depends(get_db),
     user: db_models.User = Depends(get_current_user),
 ):
-    matches = _google_books_search(q, limit=1)
+    try:
+        matches = _google_books_search(q, limit=1)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=503, detail=f"Google Books lookup failed: {exc}") from exc
     if not matches:
         raise HTTPException(status_code=404, detail="No book found")
     return create_book(BookIn(**matches[0]), db=db, user=user)
@@ -590,7 +985,7 @@ def import_book_by_isbn(
 ):
     normalized = normalize_isbn(isbn)
     _ensure_unique_isbn(db, user.id, normalized)
-    result = _search_isbn(db, normalized, limit=1)
+    result = _search_books(db, normalized, limit=1)
     if not result["matches"]:
         raise HTTPException(status_code=404, detail="No book found")
     return create_book(BookIn(**result["matches"][0]), db=db, user=user)
@@ -698,6 +1093,46 @@ def list_notes(
     return [serialize_note(note) for note in sorted(book.notes, key=lambda item: item.created_at, reverse=True)]
 
 
+@app.patch(
+    "/books/{book_id}/notes/{note_id}",
+    summary="Update note",
+    description="Updates note text, page, or type for one note owned by the authenticated user.",
+)
+def update_note(
+    book_id: int,
+    note_id: int,
+    payload: NoteUpdate,
+    db: Session = Depends(get_db),
+    user: db_models.User = Depends(get_current_user),
+):
+    _get_book_for_user(db, book_id, user.id)
+    note = _get_note_for_user(db, book_id, note_id, user.id)
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        setattr(note, key, value)
+    db.commit()
+    db.refresh(note)
+    return serialize_note(note)
+
+
+@app.delete(
+    "/books/{book_id}/notes/{note_id}",
+    status_code=204,
+    summary="Delete note",
+    description="Deletes one note owned by the authenticated user.",
+)
+def delete_note(
+    book_id: int,
+    note_id: int,
+    db: Session = Depends(get_db),
+    user: db_models.User = Depends(get_current_user),
+):
+    _get_book_for_user(db, book_id, user.id)
+    note = _get_note_for_user(db, book_id, note_id, user.id)
+    db.delete(note)
+    db.commit()
+
+
 @app.post(
     "/books/{book_id}/notes/photo",
     status_code=201,
@@ -706,12 +1141,14 @@ def list_notes(
 )
 def create_note_from_photo(
     book_id: int,
-    image: Annotated[bytes, Body(media_type="application/octet-stream")],
+    image: Annotated[bytes | None, Body(media_type="application/octet-stream")] = None,
     page: int | None = None,
     is_handwritten: bool = False,
     db: Session = Depends(get_db),
     user: db_models.User = Depends(get_current_user),
 ):
+    if not image:
+        raise HTTPException(status_code=400, detail="Upload image bytes as application/octet-stream")
     text = extract_text_from_image(image, is_handwritten=is_handwritten)
     if not text.strip():
         raise HTTPException(status_code=422, detail="Could not extract note text from the image")
@@ -744,14 +1181,53 @@ def create_note_from_voice(
     description="Extracts text from a book photo and searches Google Books for matches.",
 )
 def recognize_book_photo(
-    image: Annotated[bytes, Body(media_type="application/octet-stream")],
+    image: Annotated[bytes | None, Body(media_type="application/octet-stream")] = None,
     is_handwritten: bool = False,
 ):
+    if not image:
+        raise HTTPException(status_code=400, detail="Upload image bytes as application/octet-stream")
     text = extract_text_from_image(image, is_handwritten=is_handwritten)
     if not text.strip():
         raise HTTPException(status_code=422, detail="Could not extract text from the image")
-    matches = _google_books_search(text[:120], limit=5)
+    matches = _lookup_google_matches(text[:120], limit=5)
     return {"ocr_text": text, "matches": matches}
+
+
+
+
+def handle_image_upload(image_filepath: str, is_handwritten: bool = False):
+    """
+    Reads the uploaded image, passes it to the OCR module,
+    and uses the result to search or populate details.
+    """
+    try:
+        # Read the image as bytes (since your ocr.py expects image_bytes)
+        with open(image_filepath, "rb") as image_file:
+            img_bytes = image_file.read()
+
+        # Call your existing function
+        extracted_text = extract_text_from_image(img_bytes, is_handwritten=is_handwritten)
+
+        if not extracted_text:
+            print("No text could be extracted from the image.")
+            return None
+
+        print(f"Extracted Text: {extracted_text}")
+
+        # --- Point 2a: Automatically search based on text ---
+        # results = search_books(extracted_text, my_book_database)
+        # if results:
+        #     update_ui_with_search_results(results)
+
+        # --- Point 2b: Populate details ---
+        # else:
+        #     ui_details_field.set_text(extracted_text)
+
+        return extracted_text
+
+    except RuntimeError as e:
+        # This will catch your specific Tesseract error messages
+        print(f"OCR Error: {e}")
 
 
 @app.post(
@@ -764,8 +1240,16 @@ def recognize_book_voice(
     audio_format: str = "wav",
 ):
     text = transcribe_audio(audio, suffix=f".{audio_format.strip('.')}")
-    matches = _google_books_search(text, limit=5) if text.strip() else []
-    return {"transcript": text, "matches": matches}
+    errors = []
+    try:
+        matches = _google_books_search(text, limit=5) if text.strip() else []
+    except requests.RequestException as exc:
+        matches = []
+        errors.append(f"Google Books lookup failed: {exc}")
+    result = {"transcript": text, "matches": matches}
+    if errors:
+        result["errors"] = errors
+    return result
 
 
 @app.post(
@@ -800,7 +1284,7 @@ def public_shared_book(token: str, db: Session = Depends(get_db)):
     link = db.query(db_models.ShareLink).filter(db_models.ShareLink.token == token).first()
     if not link:
         raise HTTPException(status_code=404, detail="Share link not found")
-    return serialize_book(link.book)
+    return serialize_shared_book(link.book)
 
 
 @app.get(
@@ -825,4 +1309,3 @@ def user_stats(
     user: db_models.User = Depends(get_current_user),
 ):
     return build_user_stats(db, user)
-
