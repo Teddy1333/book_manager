@@ -1,0 +1,10 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/auth/logout/route": "app/api/auth/logout/route.js",
+  "/books/[id]/edit/page": "app/books/[id]/edit/page.js",
+  "/books/[id]/page": "app/books/[id]/page.js",
+  "/books/new/page": "app/books/new/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/page": "app/page.js",
+  "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js"
+}

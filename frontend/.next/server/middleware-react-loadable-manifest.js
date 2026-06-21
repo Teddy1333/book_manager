@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST='{"components/NotesSection.tsx -> ./HandwritingCanvas":{"id":7822,"files":["static/chunks/822.9752724173e109c7.js"]}}';

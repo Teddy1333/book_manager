@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root { color-scheme: dark; }
+}
+
+@layer components {
+  .glass {
+    background: linear-gradient(145deg, rgba(16, 23, 26, .94), rgba(8, 18, 16, .86));
+  }
+
+  .field {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(148, 163, 184, .22);
+    background: rgba(15, 23, 42, .72);
+    padding: 0.875rem 1rem;
+    color: #f8fafc;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+    font-size: 0.9rem;
+  }
+
+  .field:focus {
+    border-color: rgba(45, 212, 191, .85);
+    box-shadow: 0 0 0 4px rgba(45, 212, 191, .12);
+    background: rgba(15, 23, 42, .92);
+  }
+
+  .btn {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-weight: 800;
+    font-size: 0.875rem;
+    transition: transform .2s, border-color .2s, background .2s, color .2s, box-shadow .2s;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .btn:hover { transform: translateY(-1px); }
+  .btn:disabled { opacity: 0.5; pointer-events: none; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #2dd4bf, #99f6e4);
+    color: #042f2e;
+    box-shadow: 0 18px 44px rgba(45, 212, 191, .28);
+    border: none;
+  }
+
+  .btn-primary:hover { box-shadow: 0 22px 56px rgba(45, 212, 191, .38); }
+
+  .btn-secondary {
+    border: 1px solid rgba(148, 163, 184, .24);
+    background: rgba(15, 23, 42, .74);
+    color: #d7e7df;
+  }
+
+  .btn-secondary:hover {
+    border-color: rgba(45, 212, 191, .55);
+    background: rgba(20, 184, 166, .12);
+    color: white;
+  }
+
+  .btn-danger {
+    border: 1px solid rgba(248, 113, 113, .34);
+    background: rgba(127, 29, 29, .3);
+    color: #fecaca;
+  }
+
+  .btn-danger:hover {
+    border-color: rgba(248, 113, 113, .72);
+    background: rgba(185, 28, 28, .42);
+    color: white;
+  }
+
+  .btn-ai {
+    background: linear-gradient(135deg, rgba(20, 184, 166, .96), rgba(251, 191, 36, .9));
+    color: #082f2a;
+    font-weight: 900;
+    box-shadow: 0 18px 42px rgba(20, 184, 166, .22);
+    border: none;
+  }
+
+  .btn-ai:hover { box-shadow: 0 22px 52px rgba(251, 191, 36, .18); }
+
+  .panel {
+    border: 1px solid rgba(148, 163, 184, .18);
+    background: rgba(8, 18, 16, .78);
+    backdrop-filter: blur(18px);
+  }
+}

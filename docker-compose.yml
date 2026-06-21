@@ -1,0 +1,69 @@
+services:
+  # ── Persistence ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bookuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bookpass}
+      POSTGRES_DB: ${POSTGRES_DB:-bookdb}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bookuser} -d ${POSTGRES_DB:-bookdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── Core API ─────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend/api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bookuser}:${POSTGRES_PASSWORD:-bookpass}@postgres:5432/${POSTGRES_DB:-bookdb}
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai:8001}
+      SCRAPER_SERVICE_URL: ${SCRAPER_SERVICE_URL:-http://scraper:8002}
+      BOOK_MANAGER_SECRET_KEY: ${BOOK_MANAGER_SECRET_KEY:-diplomna_rabota_pu_key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai:
+        condition: service_started
+      scraper:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── AI Service (OCR + Speech + Suggestions) ───────────────────────────────────
+  ai:
+    build:
+      context: ./backend/ai
+    ports:
+      - "${AI_PORT:-8001}:8001"
+    restart: unless-stopped
+
+  # ── Scraper Service (Helikon/Playwright) ──────────────────────────────────────
+  scraper:
+    build:
+      context: ./backend/scraper
+    ports:
+      - "${SCRAPER_PORT:-8002}:8002"
+    restart: unless-stopped
+
+  # ── Frontend (Next.js) ────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://api:8000}
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
