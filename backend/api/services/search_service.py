@@ -15,10 +15,40 @@ AI_SERVICE_URL = getenv("AI_SERVICE_URL", "http://localhost:8001")
 SCRAPER_SERVICE_URL = getenv("SCRAPER_SERVICE_URL", "http://localhost:8002")
 
 
+def ai_vision(image: bytes) -> dict:
+    """Call AI service /vision endpoint for structured book metadata extraction."""
+    try:
+        response = httpx.post(
+            f"{AI_SERVICE_URL}/vision",
+            content=image,
+            headers={"Content-Type": "application/octet-stream"},
+            timeout=60.0,
+        )
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"AI service unavailable: {exc}") from exc
+
+
+def ai_page_number(image: bytes) -> int | None:
+    """Call AI service /vision/page-number endpoint to detect page number from image."""
+    try:
+        response = httpx.post(
+            f"{AI_SERVICE_URL}/vision/page-number",
+            content=image,
+            headers={"Content-Type": "application/octet-stream"},
+            timeout=60.0,
+        )
+        response.raise_for_status()
+        return response.json().get("page_number")
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"AI service unavailable: {exc}") from exc
+
+
 def ai_ocr(image: bytes, is_handwritten: bool = False) -> str:
     try:
         response = httpx.post(
-            f"{AI_SERVICE_URL}/ocr",
+            f"{AI_SERVICE_URL}/vision/text",
             content=image,
             headers={"Content-Type": "application/octet-stream"},
             params={"is_handwritten": str(is_handwritten).lower()},
@@ -53,7 +83,22 @@ def helikon_search(query: str, limit: int = 5) -> list[dict]:
             timeout=30.0,
         )
         response.raise_for_status()
-        return response.json()
+        raw_results = response.json()
+        # Normalize to the standard format used by other search functions
+        normalized = []
+        for item in raw_results:
+            normalized.append({
+                "title": item.get("title"),
+                "author": item.get("author"),
+                "isbn": item.get("isbn"),
+                "publisher": item.get("publisher"),
+                "pages": item.get("pages"),
+                "description": item.get("description"),
+                "cover_url": None,
+                "source": "helikon",
+                "tags": [t.strip() for t in (item.get("categories") or "").split(",") if t.strip()],
+            })
+        return normalized
     except httpx.HTTPError as exc:
         raise RuntimeError(f"Scraper service unavailable: {exc}") from exc
 

@@ -1,9 +1,17 @@
-from fastapi import APIRouter
+import json
+import os
+
+from fastapi import APIRouter, HTTPException
+from openai import AsyncOpenAI
 from pydantic import BaseModel
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
 router = APIRouter()
+
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini")
+
+client = AsyncOpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
 
 
 class BookForSuggestion(BaseModel):
@@ -14,38 +22,49 @@ class BookForSuggestion(BaseModel):
     tags: list[str] = []
 
 
-def _book_text(book: BookForSuggestion) -> str:
-    parts = [book.title or "", book.author or "", book.description or "", " ".join(book.tags)]
-    return " ".join(part for part in parts if part).strip()
-
-
 @router.post("/suggest")
-def suggest(books: list[BookForSuggestion], limit: int = 10) -> list[dict]:
-    books_with_text = [book for book in books if _book_text(book)]
-    if len(books_with_text) < 2:
+async def suggest(books: list[BookForSuggestion], limit: int = 5) -> list[dict]:
+    if not books:
         return []
 
-    documents = [_book_text(book) for book in books_with_text]
-    matrix = TfidfVectorizer(stop_words="english").fit_transform(documents)
-    similarities = cosine_similarity(matrix)
+    # Collect all tags for preference analysis
+    all_tags = []
+    for b in books:
+        all_tags.extend(b.tags)
+    tag_summary = ""
+    if all_tags:
+        from collections import Counter
+        top_tags = Counter(all_tags).most_common(10)
+        tag_summary = f"\nTheir most common genres/tags (by frequency): {', '.join(f'{tag} ({count})' for tag, count in top_tags)}\n"
 
-    suggestions = []
-    for index, book in enumerate(books_with_text):
-        related_scores = [
-            similarities[index][other_index]
-            for other_index in range(len(books_with_text))
-            if other_index != index
-        ]
-        score = max(related_scores) if related_scores else 0
-        if score <= 0:
-            continue
-        suggestions.append({
-            "book_id": book.id,
-            "title": book.title,
-            "author": book.author,
-            "score": round(float(score), 4),
-            "reasons": ["similar description profile"],
-        })
+    # Build a summary of the user's library
+    library_summary = "\n".join(
+        f"- {b.title or 'Untitled'} by {b.author or 'Unknown'}"
+        + (f" [tags: {', '.join(b.tags)}]" if b.tags else "")
+        + (f" — {b.description[:100]}..." if b.description and len(b.description) > 100 else f" — {b.description}" if b.description else "")
+        for b in books
+    )
 
-    suggestions.sort(key=lambda item: item["score"], reverse=True)
-    return suggestions[:limit]
+    prompt = (
+        f"Based on this person's book library and reading preferences, suggest {limit} NEW books they would enjoy. "
+        "These must be real books that actually exist — not ones already in their library. "
+        "Pay close attention to their preferred genres/tags when making suggestions.\n\n"
+        f"Their library:\n{library_summary}\n"
+        f"{tag_summary}\n"
+        f"Return a JSON object with key \"suggestions\" containing an array of {limit} objects, each with:\n"
+        "- title (string): the book title\n"
+        "- author (string): the author name\n"
+        "- reason (string): one short sentence explaining why they'd like it based on their reading patterns\n"
+    )
+
+    try:
+        response = await client.chat.completions.create(
+            model=VISION_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+        content = response.choices[0].message.content
+        result = json.loads(content)
+        return result.get("suggestions", [])[:limit]
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Suggestion generation failed: {exc}")

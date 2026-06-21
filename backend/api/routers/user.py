@@ -36,7 +36,7 @@ def suggestions(
         for book in books
     ]
     try:
-        response = httpx.post(f"{AI_SERVICE_URL}/suggest", json=book_data, timeout=10.0)
+        response = httpx.post(f"{AI_SERVICE_URL}/suggest", json=book_data, timeout=30.0)
         response.raise_for_status()
         return response.json()
     except httpx.HTTPError:

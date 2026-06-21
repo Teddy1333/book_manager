@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import { api } from '@/lib/api';
 import type { Book } from '@/types';
@@ -17,6 +17,12 @@ export default function ProgressSection({ book, onRefresh }: ProgressSectionProp
 
   const [currentPage, setCurrentPage] = useState(String(latest?.current_page ?? ''));
   const [totalPages, setTotalPages] = useState(String(latest?.total_pages ?? book.pages ?? ''));
+  const [processing, setProcessing] = useState(false);
+
+  useEffect(() => {
+    setCurrentPage(String(book.latest_progress?.current_page ?? ''));
+    setTotalPages(String(book.latest_progress?.total_pages ?? book.pages ?? ''));
+  }, [book.latest_progress?.current_page, book.latest_progress?.total_pages, book.pages]);
 
   async function saveProgress() {
     const cp = Number(currentPage || 0);
@@ -34,6 +40,8 @@ export default function ProgressSection({ book, onRefresh }: ProgressSectionProp
   }
 
   async function uploadPhoto(file: File) {
+    setProcessing(true);
+    showToast('🔄 Processing page photo…');
     try {
       await api(`/books/${book.id}/progress/photo`, {
         method: 'POST',
@@ -43,7 +51,9 @@ export default function ProgressSection({ book, onRefresh }: ProgressSectionProp
       showToast('✨ Progress tracked from page photo');
       onRefresh();
     } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : 'OCR progress failed', 'error');
+      showToast(e instanceof Error ? e.message : 'Photo processing failed', 'error');
+    } finally {
+      setProcessing(false);
     }
   }
 
@@ -85,17 +95,18 @@ export default function ProgressSection({ book, onRefresh }: ProgressSectionProp
           Save Progress
         </button>
       </div>
-      <label className="mt-4 grid cursor-pointer place-items-center rounded-2xl border border-dashed border-teal-300/35 bg-teal-300/5 p-6 text-center transition hover:border-teal-200 hover:bg-teal-300/10">
+      <label className={`mt-4 grid cursor-pointer place-items-center rounded-2xl border border-dashed border-teal-300/35 bg-teal-300/5 p-6 text-center transition hover:border-teal-200 hover:bg-teal-300/10 ${processing ? 'pointer-events-none opacity-60' : ''}`}>
         <input
           className="sr-only"
           type="file"
           accept="image/*"
           capture="environment"
+          disabled={processing}
           onChange={(e) => e.target.files?.[0] && uploadPhoto(e.target.files[0])}
         />
-        <span className="text-3xl">✨</span>
-        <span className="mt-2 block font-extrabold text-white">Track Progress by Page Photo</span>
-        <span className="mt-1 block text-sm text-slate-400">Upload a page photo for OCR page detection.</span>
+        <span className="text-3xl">{processing ? '🔄' : '✨'}</span>
+        <span className="mt-2 block font-extrabold text-white">{processing ? 'Processing…' : 'Track Progress by Page Photo'}</span>
+        <span className="mt-1 block text-sm text-slate-400">Upload a page photo to detect page number.</span>
       </label>
     </section>
   );

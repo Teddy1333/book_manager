@@ -3,12 +3,16 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import ocr, speech, suggestions
+from services.config import validate_config
+
+validate_config()
+
+from routers import speech, suggestions, vision
 
 app = FastAPI(
     title="Book Diary — AI Service",
-    description="OCR (Tesseract), speech transcription, and TF-IDF book suggestions.",
-    version="1.0.0",
+    description="Vision-based book metadata extraction, speech transcription, and TF-IDF suggestions.",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -24,6 +28,6 @@ def health():
     return {"status": "ok", "time": datetime.now(UTC).isoformat()}
 
 
-app.include_router(ocr.router)
+app.include_router(vision.router)
 app.include_router(speech.router)
 app.include_router(suggestions.router)

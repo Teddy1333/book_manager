@@ -54,6 +54,12 @@ async function handler(req: NextRequest, { params }: { params: { path: string[] 
   }
 
   const resBody = await upstream.arrayBuffer();
+
+  // 204 No Content should not have a body
+  if (upstream.status === 204) {
+    return new NextResponse(null, { status: 204, headers: resHeaders });
+  }
+
   return new NextResponse(resBody, { status: upstream.status, headers: resHeaders });
 }
 

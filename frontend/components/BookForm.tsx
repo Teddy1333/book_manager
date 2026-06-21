@@ -29,10 +29,12 @@ export default function BookForm({ book }: BookFormProps) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [shareImportUrl, setShareImportUrl] = useState('');
   const [saving, setSaving] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const voiceRecRef = useRef<any>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
 
   function fillFromResult(result: BookSearchResult) {
     setTitle(result.title ?? '');
@@ -76,7 +78,8 @@ export default function BookForm({ book }: BookFormProps) {
   }
 
   async function recognizePhoto(file: File) {
-    showToast('Processing photo with OCR…');
+    setProcessing(true);
+    showToast('🔄 Recognizing book from photo…');
     try {
       const data = await api('/books/photo/recognize', {
         method: 'POST',
@@ -93,45 +96,59 @@ export default function BookForm({ book }: BookFormProps) {
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Photo recognition failed', 'error');
     } finally {
+      setProcessing(false);
       if (photoInputRef.current) photoInputRef.current.value = '';
     }
   }
 
-  function toggleVoiceSearch() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
-    const Recognition = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-
-    if (!Recognition) return showToast('Voice search not supported in this browser', 'error');
-
-    if (voiceRecRef.current) {
-      voiceRecRef.current.stop();
+  async function toggleVoiceSearch() {
+    if (isRecording && recorderRef.current) {
+      recorderRef.current.stop();
       return;
     }
 
-    const rec = new Recognition();
-    voiceRecRef.current = rec;
-    rec.lang = 'bg-BG';
-    rec.interimResults = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunksRef.current = [];
+      const rec = new MediaRecorder(stream);
+      recorderRef.current = rec;
+      setIsRecording(true);
 
-    let transcript = '';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      transcript = Array.from(e.results as any[])
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((r: any) => r[0].transcript)
-        .join(' ')
-        .trim();
-      setSearchQuery(transcript);
-    };
-    rec.onerror = () => showToast('Voice search failed', 'error');
-    rec.onend = async () => {
-      voiceRecRef.current = null;
-      if (transcript) await runSearch(transcript);
-    };
-    rec.start();
-    showToast('Listening… speak the book title');
+      rec.ondataavailable = (e) => chunksRef.current.push(e.data);
+      rec.onstop = async () => {
+        setIsRecording(false);
+        stream.getTracks().forEach((t) => t.stop());
+        recorderRef.current = null;
+
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        showToast('🔄 Transcribing…');
+        try {
+          const data = await api('/books/voice/recognize?audio_format=webm', {
+            method: 'POST',
+            headers: { 'content-type': 'application/octet-stream' },
+            body: await blob.arrayBuffer(),
+          });
+          const transcript = data.transcript || '';
+          setSearchQuery(transcript);
+          if (data.matches?.length) {
+            setSearchResults(data.matches);
+            fillFromResult(data.matches[0]);
+            showToast('Voice recognized — book details filled');
+          } else if (transcript) {
+            await runSearch(transcript);
+          } else {
+            showToast('Could not recognize speech', 'error');
+          }
+        } catch (e: unknown) {
+          showToast(e instanceof Error ? e.message : 'Voice search failed', 'error');
+        }
+      };
+
+      rec.start();
+      showToast('🎙️ Recording… tap again to stop');
+    } catch {
+      showToast('Microphone access denied', 'error');
+    }
   }
 
   async function importFromShare() {
@@ -229,11 +246,11 @@ export default function BookForm({ book }: BookFormProps) {
 
           {/* AI Tools */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <button className="btn btn-ai" type="button" onClick={() => photoInputRef.current?.click()}>
-              ✨ Add by Photo
+            <button className="btn btn-ai" type="button" disabled={processing} onClick={() => photoInputRef.current?.click()}>
+              {processing ? '🔄 Processing…' : '✨ Add by Photo'}
             </button>
-            <button className="btn btn-ai" type="button" onClick={toggleVoiceSearch}>
-              ✨ Add by Voice
+            <button className="btn btn-ai" type="button" disabled={processing} onClick={toggleVoiceSearch}>
+              {isRecording ? '⏹ Stop Recording' : '✨ Add by Voice'}
             </button>
             <input
               ref={photoInputRef}

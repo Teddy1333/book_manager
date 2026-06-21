@@ -37,12 +37,17 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # ── AI Service (OCR + Speech + Suggestions) ───────────────────────────────────
+  # ── AI Service (Vision + Speech + Suggestions) ────────────────────────────────
   ai:
     build:
       context: ./backend/ai
     ports:
       - "${AI_PORT:-8001}:8001"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_VISION_MODEL: ${OPENAI_VISION_MODEL:-gpt-4o-mini}
+      SCRAPER_SERVICE_URL: ${SCRAPER_SERVICE_URL:-http://scraper:8002}
     restart: unless-stopped
 
   # ── Scraper Service (Helikon/Playwright) ──────────────────────────────────────

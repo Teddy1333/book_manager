@@ -11,6 +11,7 @@ from services.book_service import create_book, ensure_unique_isbn
 from services.search_service import (
     ai_ocr,
     ai_transcribe,
+    ai_vision,
     google_books_search,
     helikon_search,
     lookup_google_matches,
@@ -98,11 +99,38 @@ def recognize_book_photo(
 ):
     if not image:
         raise HTTPException(status_code=400, detail="Upload image bytes as application/octet-stream")
-    text = ai_ocr(image, is_handwritten=is_handwritten)
-    if not text.strip():
-        raise HTTPException(status_code=422, detail="Could not extract text from the image")
-    matches = lookup_google_matches(text[:120], limit=5)
-    return {"ocr_text": text, "matches": matches}
+
+    # Use vision model for structured metadata extraction
+    vision_result = ai_vision(image)
+    title = vision_result.get("title")
+    author = vision_result.get("author")
+
+    if not title and not author:
+        raise HTTPException(status_code=422, detail="Could not identify book from the image")
+
+    # Build matches from enrichment or do a lookup
+    matches = []
+    if vision_result.get("enrichment"):
+        matches = vision_result["enrichment"]
+    else:
+        query = title or author
+        matches = lookup_google_matches(query[:120], limit=5)
+
+    # If no external matches found, create one from the vision extraction itself
+    if not matches and (title or author):
+        matches = [{
+            "title": title,
+            "author": author,
+            "isbn": vision_result.get("isbn"),
+            "description": vision_result.get("description"),
+            "publisher": None,
+            "pages": None,
+            "cover_url": None,
+            "source": "vision",
+            "tags": [],
+        }]
+
+    return {"ocr_text": title or author, "matches": matches}
 
 
 @router.post("/books/voice/recognize", summary="AI book recognition from voice")

@@ -7,7 +7,7 @@ from database import db_models
 from database.db_manager import get_db
 from dependencies.auth import get_current_user
 from services.book_service import get_book_for_user
-from services.search_service import ai_ocr
+from services.search_service import ai_page_number
 from schemas.progress import ProgressIn
 from utils import pages_as_int
 
@@ -54,13 +54,12 @@ def add_progress_from_photo(
     db: Session = Depends(get_db),
     user: db_models.User = Depends(get_current_user),
 ):
-    text = ai_ocr(image, is_handwritten=is_handwritten)
-    numbers = [int(part) for part in "".join(ch if ch.isdigit() else " " for ch in text).split()]
-    if not numbers:
+    page_number = ai_page_number(image)
+    if page_number is None:
         raise HTTPException(status_code=422, detail="Could not detect a page number from the image")
     return add_progress(
         book_id,
-        ProgressIn(current_page=max(numbers), source="photo"),
+        ProgressIn(current_page=page_number, source="photo"),
         db=db,
         user=user,
     )

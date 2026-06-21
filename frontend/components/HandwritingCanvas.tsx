@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import { api } from '@/lib/api';
 
@@ -13,6 +13,7 @@ export default function HandwritingCanvas({ bookId, onNoteAdded }: HandwritingCa
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
+  const [processing, setProcessing] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -75,6 +76,8 @@ export default function HandwritingCanvas({ bookId, onNoteAdded }: HandwritingCa
     if (!canvas) return;
     canvas.toBlob(async (blob) => {
       if (!blob) return;
+      setProcessing(true);
+      showToast('🔄 Recognizing handwriting…');
       try {
         await api(`/books/${bookId}/notes/photo?is_handwritten=true`, {
           method: 'POST',
@@ -86,6 +89,8 @@ export default function HandwritingCanvas({ bookId, onNoteAdded }: HandwritingCa
         onNoteAdded();
       } catch (e: unknown) {
         showToast(e instanceof Error ? e.message : 'Conversion failed', 'error');
+      } finally {
+        setProcessing(false);
       }
     }, 'image/png');
   }
@@ -99,11 +104,11 @@ export default function HandwritingCanvas({ bookId, onNoteAdded }: HandwritingCa
         className="block h-48 w-full cursor-crosshair touch-none rounded-xl border border-white/10 bg-slate-950"
       />
       <div className="flex gap-3">
-        <button onClick={clearCanvas} type="button" className="btn btn-secondary flex-1">
+        <button onClick={clearCanvas} type="button" className="btn btn-secondary flex-1" disabled={processing}>
           Clear
         </button>
-        <button onClick={convertToText} type="button" className="btn btn-ai flex-1">
-          ✨ Convert to Text
+        <button onClick={convertToText} type="button" className="btn btn-ai flex-1" disabled={processing}>
+          {processing ? '🔄 Processing…' : '✨ Convert to Text'}
         </button>
       </div>
     </div>

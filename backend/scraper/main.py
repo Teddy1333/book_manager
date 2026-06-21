@@ -7,8 +7,8 @@ from routers import search
 
 app = FastAPI(
     title="Book Diary — Scraper Service",
-    description="Helikon.bg search via Playwright headless browser.",
-    version="1.0.0",
+    description="Book search via pluggable scrapers (Helikon.bg, etc.).",
+    version="2.0.0",
 )
 
 app.add_middleware(

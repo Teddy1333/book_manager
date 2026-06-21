@@ -13,6 +13,8 @@ export default function NotesSection({ bookId }: { bookId: number }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [text, setText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -50,6 +52,32 @@ export default function NotesSection({ bookId }: { bookId: number }) {
       loadNotes();
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Could not delete note', 'error');
+    }
+  }
+
+  function startEditing(note: Note) {
+    setEditingId(note.id);
+    setEditText(note.text);
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
+    setEditText('');
+  }
+
+  async function saveEdit(noteId: number) {
+    if (!editText.trim()) return showToast('Note cannot be empty', 'error');
+    try {
+      await api(`/books/${bookId}/notes/${noteId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ text: editText.trim() }),
+      });
+      showToast('Note updated');
+      setEditingId(null);
+      setEditText('');
+      loadNotes();
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Could not update note', 'error');
     }
   }
 
@@ -121,18 +149,56 @@ export default function NotesSection({ bookId }: { bookId: number }) {
           <div className="grid gap-3">
             {notes.map((note) => (
               <article key={note.id} className="rounded-xl border border-white/10 bg-slate-950/55 p-3">
-                <p className="text-sm leading-6 text-slate-200">{note.text}</p>
-                <p className="mt-2 text-xs font-bold uppercase tracking-[.16em] text-teal-200/60">
-                  {note.note_type}
-                  {note.page != null ? ` · Page ${note.page}` : ''}
-                </p>
-                <button
-                  className="btn btn-danger mt-2 min-h-9 px-3 py-1 text-xs"
-                  type="button"
-                  onClick={() => deleteNote(note.id)}
-                >
-                  Delete
-                </button>
+                {editingId === note.id ? (
+                  <>
+                    <textarea
+                      className="field min-h-24"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        className="btn btn-primary min-h-9 px-3 py-1 text-xs"
+                        type="button"
+                        onClick={() => saveEdit(note.id)}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="btn btn-secondary min-h-9 px-3 py-1 text-xs"
+                        type="button"
+                        onClick={cancelEditing}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm leading-6 text-slate-200">{note.text}</p>
+                    <p className="mt-2 text-xs font-bold uppercase tracking-[.16em] text-teal-200/60">
+                      {note.note_type}
+                      {note.page != null ? ` · Page ${note.page}` : ''}
+                    </p>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        className="btn btn-secondary min-h-9 px-3 py-1 text-xs"
+                        type="button"
+                        onClick={() => startEditing(note)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-danger min-h-9 px-3 py-1 text-xs"
+                        type="button"
+                        onClick={() => deleteNote(note.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
               </article>
             ))}
           </div>

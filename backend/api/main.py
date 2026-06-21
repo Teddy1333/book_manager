@@ -4,11 +4,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from database import db_models
-from database.db_manager import engine
+from database import db_models  # noqa: F401 — imported for relationship registration
 from routers import auth, books, lookup, notes, progress, sharing, user
-
-db_models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Book Diary API",

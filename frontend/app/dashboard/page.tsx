@@ -12,6 +12,9 @@ export default function DashboardPage() {
   const { showToast } = useToast();
   const [books, setBooks] = useState<Book[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [suggestions, setSuggestions] = useState<{title: string; author: string; reason: string}[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [addingBook, setAddingBook] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -32,6 +35,65 @@ export default function DashboardPage() {
   }, [showToast]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  async function loadSuggestions() {
+    setSuggestionsLoading(true);
+    try {
+      const data = await api('/suggestions');
+      setSuggestions(Array.isArray(data) ? data : []);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }
+
+  async function addSuggestionToLibrary(index: number) {
+    const s = suggestions[index];
+    setAddingBook(index);
+    try {
+      // Look up the book to get enriched info (isbn, pages, description, cover, etc.)
+      const searchQuery = `${s.title} ${s.author}`.trim();
+      let bookData: Record<string, unknown> = {
+        title: s.title,
+        author: s.author,
+        source: 'ai_suggestion',
+      };
+
+      try {
+        const lookupResult = await api(`/lookup/google?q=${encodeURIComponent(searchQuery)}&limit=1`);
+        const matches = Array.isArray(lookupResult) ? lookupResult : [];
+        if (matches.length > 0) {
+          const match = matches[0];
+          bookData = {
+            title: match.title || s.title,
+            author: match.author || s.author,
+            isbn: match.isbn || null,
+            publisher: match.publisher || null,
+            pages: match.pages || null,
+            description: match.description || null,
+            cover_url: match.cover_url || null,
+            source: 'ai_suggestion',
+            tags: match.tags || [],
+          };
+        }
+      } catch {
+        // If lookup fails, proceed with basic info
+      }
+
+      await api('/books', {
+        method: 'POST',
+        body: JSON.stringify(bookData),
+      });
+      showToast(`"${s.title}" added to your library`);
+      setSuggestions(suggestions.filter((_, i) => i !== index));
+      loadData();
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Could not add book', 'error');
+    } finally {
+      setAddingBook(null);
+    }
+  }
 
   async function deleteBook(bookId: number) {
     if (!confirm('Delete this book and all its notes?')) return;
@@ -124,6 +186,46 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
+
+        {/* AI Suggestions */}
+        <div className="mt-8">
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[.2em] text-teal-200/70">AI Powered</p>
+              <h3 className="mt-1 text-2xl font-extrabold text-white">Book Suggestions</h3>
+            </div>
+            <button
+              className="btn btn-ai"
+              type="button"
+              disabled={suggestionsLoading || books.length === 0}
+              onClick={loadSuggestions}
+            >
+              {suggestionsLoading ? '🔄 Thinking…' : '✨ Get Suggestions'}
+            </button>
+          </div>
+          {suggestions.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {suggestions.map((s, i) => (
+                <article key={i} className="panel rounded-xl p-4 shadow-glow">
+                  <p className="font-extrabold text-white">{s.title}</p>
+                  <p className="text-sm text-slate-400">{s.author}</p>
+                  <p className="mt-2 text-xs text-teal-200/70">{s.reason}</p>
+                  <button
+                    className="btn btn-primary mt-3 min-h-9 w-full px-3 py-1 text-xs"
+                    type="button"
+                    disabled={addingBook === i}
+                    onClick={() => addSuggestionToLibrary(i)}
+                  >
+                    {addingBook === i ? 'Adding…' : '+ Add to Library'}
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+          {!suggestionsLoading && suggestions.length === 0 && books.length > 0 && (
+            <p className="text-sm text-slate-400">Click "Get Suggestions" to get AI-powered book recommendations based on your library.</p>
+          )}
+        </div>
       </div>
 
       <Link
